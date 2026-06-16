@@ -10,6 +10,7 @@ const css = await read('./web/styles.css');
 let engine = await read('./engine/massbalance.mjs');
 let chart = await read('./web/chart.js');
 let defAc = await read('./web/default-aircraft.js');
+let atrAc = await read('./web/atr-aircraft.js');
 let app = await read('./web/app.js');
 let html = await read('./web/index.html');
 
@@ -19,11 +20,13 @@ const stripExports = (s) => s.replace(/^export\s+/gm, '');
 engine = stripExports(stripImports(engine));
 chart = stripExports(stripImports(chart));
 defAc = stripImports(defAc).replace(/^\s*export default\s+/m, 'const DEFAULT_AIRCRAFT = ');
+atrAc = stripImports(atrAc).replace(/^\s*export default\s+/m, 'const ATR_AIRCRAFT = ');
 app = stripImports(app); // app has no exports
 
 const bundleJs = [
   '/* ===== engine/massbalance.mjs ===== */', engine,
   '/* ===== web/default-aircraft.js ===== */', defAc,
+  '/* ===== web/atr-aircraft.js ===== */', atrAc,
   '/* ===== web/chart.js ===== */', chart,
   '/* ===== web/app.js ===== */', app,
 ].join('\n\n');

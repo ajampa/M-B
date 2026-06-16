@@ -1,0 +1,76 @@
+{
+  "id": "atr72-eigpp",
+  "name": "EI-GPP",
+  "_note": "ATR 72. Index/MAC/basic/MZFM, crew, the Main fuel-arm table, the section row arms and the CG envelope are supplied values. MTOM/MLM/MRW and cargo/pantry arms marked _placeholder.",
+  "units": { "mass": "kg", "arm": "m" },
+
+  "index": { "sta": 14.18, "scale": 150.0, "offset": 0.0 },
+  "mac": { "lemac": 13.604, "maclen": 2.303 },
+
+  "limits": { "mzfm": 21000, "mtom": 23000, "mlm": 22350, "mrw": 23100, "_placeholder": "mtom/mlm/mrw typical ATR72-600; confirm from AFM" },
+
+  "envelopes": {
+    "TOL": { "fwd": [[13000, 19.58], [18000, 18.03], [23000, 24.0]], "aft": [[13000, 31.42], [23000, 33.85]] },
+    "FLT": { "fwd": [[13000, 19.58], [18000, 18.03], [23000, 24.0]], "aft": [[13000, 31.42], [23000, 33.85]] }
+  },
+  "cgLimits": { "min": -45, "max": 55 },
+
+  "basic": { "mass": 13462, "arm": 14.032, "label": "Basic Mass / Basic Arm (EI-GPP weighing)" },
+
+  "stations": {
+    "crew": [
+      { "id": "cpt", "label": "Captain", "arm": 4.54, "mass": 85 },
+      { "id": "fo", "label": "First Officer", "arm": 4.54, "mass": 85 },
+      { "id": "third", "label": "Third Member", "arm": 5.5, "mass": 85 },
+      { "id": "fwdca", "label": "Fwd CA", "arm": 7.188, "mass": 75 },
+      { "id": "aftca", "label": "Aft CA", "arm": 22.172, "mass": 75 }
+    ],
+    "pantry": [
+      { "id": "galley", "label": "Aft galley", "mass": 50, "arm": 22.0, "_placeholder": true }
+    ],
+    "cargo": [
+      { "id": "fwdHold", "label": "Forward hold", "arm": 6.5, "maxMass": 500, "_placeholder": true },
+      { "id": "aftHold", "label": "Aft hold", "arm": 22.6, "maxMass": 700, "_placeholder": true }
+    ]
+  },
+
+  "cabinRows": [
+    { "id": "r1", "label": "1", "section": "A", "arm": 8.466, "capacity": 4 },
+    { "id": "r2", "label": "2", "section": "A", "arm": 9.203, "capacity": 4 },
+    { "id": "r3", "label": "3", "section": "A", "arm": 9.940, "capacity": 4 },
+    { "id": "r4", "label": "4", "section": "A", "arm": 10.676, "capacity": 4 },
+    { "id": "r5", "label": "5", "section": "A", "arm": 11.413, "capacity": 4 },
+    { "id": "r6", "label": "6", "section": "A", "arm": 12.149, "capacity": 4 },
+    { "id": "r7", "label": "7", "section": "B", "arm": 12.886, "capacity": 4 },
+    { "id": "r8", "label": "8", "section": "B", "arm": 13.623, "capacity": 4 },
+    { "id": "r9", "label": "9", "section": "B", "arm": 14.359, "capacity": 4 },
+    { "id": "r10", "label": "10", "section": "B", "arm": 15.096, "capacity": 4 },
+    { "id": "r11", "label": "11", "section": "B", "arm": 15.832, "capacity": 4 },
+    { "id": "r12", "label": "12", "section": "B", "arm": 16.569, "capacity": 4 },
+    { "id": "r13", "label": "13", "section": "B", "arm": 17.306, "capacity": 4 },
+    { "id": "r14", "label": "14", "section": "C", "arm": 18.042, "capacity": 4 },
+    { "id": "r15", "label": "15", "section": "C", "arm": 18.779, "capacity": 4 },
+    { "id": "r16", "label": "16", "section": "C", "arm": 19.515, "capacity": 4 },
+    { "id": "r17", "label": "17", "section": "C", "arm": 20.252, "capacity": 4 },
+    { "id": "r18", "label": "18", "section": "C", "arm": 20.989, "capacity": 4 }
+  ],
+
+  "standardMasses": { "adult": 84, "adultMale": 88, "adultFemale": 70, "child": 35, "infant": 0, "stretcher": 120 },
+
+  "tanks": [
+    {
+      "name": "Main",
+      "maxMass": 5000,
+      "minReserve": 75,
+      "fillOrder": 1,
+      "burnOrder": 1,
+      "table": [[0,14.590],[157,14.590],[314,14.535],[471,14.505],[628,14.488],[785,14.477],[942,14.470],[1099,14.466],[1256,14.463],[1413,14.460],[1570,14.458],[1727,14.457],[1884,14.456],[2041,14.455],[2198,14.455],[2355,14.455],[2512,14.454],[2669,14.453],[2826,14.452],[2983,14.452],[3140,14.452],[3297,14.452],[3454,14.451],[3611,14.451],[3768,14.450],[3925,14.450],[4082,14.448],[4239,14.446],[4396,14.444],[4553,14.441],[4710,14.438],[4867,14.434],[5000,14.430]]
+    }
+  ],
+
+  "seedLoad": {
+    "flightNo": "EIN-72", "route": "EIDW→EGLC",
+    "rows": { "r10": 4, "r11": 4, "r12": 4, "r13": 4, "r14": 4, "r15": 2 },
+    "fuel": { "ramp": 2500, "taxi": 40, "trip": 1500 }
+  }
+}

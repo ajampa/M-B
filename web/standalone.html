@@ -224,6 +224,21 @@ input.wide { width: 100%; text-align: left; }
 }
 .popup-item:hover { background: var(--panel-2); }
 .popup-item.on { color: var(--blue); font-weight: 700; }
+
+/* aircraft picker in the command bar */
+.acpick {
+  display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 7px 12px; cursor: pointer; color: #fff;
+}
+.acpick:hover { background: rgba(255,255,255,.14); }
+.acpick-reg { font-weight: 700; font-size: 13px; letter-spacing: .04em; }
+.acpick-type { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: rgba(255,255,255,.6); border: 1px solid rgba(255,255,255,.22); border-radius: 4px; padding: 1px 5px; }
+.acpick .caret { color: rgba(255,255,255,.55); font-size: 10px; }
+
+/* section seating */
+.section-block { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+.section-head { display: flex; align-items: center; justify-content: space-between; background: var(--panel-2); padding: 9px 14px; font-weight: 700; font-size: 13px; letter-spacing: .02em; }
+.section-block .row { padding: 9px 14px; border-top: 1px solid var(--line); margin: 0; }
 .seat .kg { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .seat .sid { position: absolute; }
 .seat.male { background: #e6edf5; border-color: #aebfd4; }
@@ -289,13 +304,11 @@ textarea { width: 100%; min-height: 88px; border: 1px solid var(--line-strong); 
 <div class="app-frame">
   <div class="appbar">
     <div class="mark">M&amp;B</div>
-    <div>
-      <div class="title">Trim</div>
-      <div class="reg" id="acReg">—</div>
-    </div>
+    <div><div class="title">Trim</div></div>
+    <button class="acpick" id="acPick"><span class="acpick-reg" id="acReg">—</span><span class="acpick-type" id="acType"></span><span class="caret">▾</span></button>
     <div class="spacer"></div>
     <div class="flightpick" id="flightPick">
-      <span>Flight</span><b id="flightNo">TRM-204</b><span>·</span><span id="flightRoute">ESSA→EGLL</span>
+      <span>Flight</span><b id="flightNo">—</b><span>·</span><span id="flightRoute"></span>
     </div>
     <span id="overallBadge"></span>
   </div>
@@ -367,11 +380,11 @@ textarea { width: 100%; min-height: 88px; border: 1px solid var(--line-strong); 
         <div class="card">
           <div class="card-head"><h2>Aircraft</h2><div class="sub">Dispatch — identity &amp; weighing</div></div>
           <div class="field"><div class="label"><div class="t">Type / registration</div></div><input type="text" class="wide" id="ac_name" /></div>
-          <div class="field"><div class="label"><div class="t">Basic Mass</div><div class="h">Empty weighed mass (BM)</div></div><input type="number" id="basicMass" /><span class="unit">lb</span></div>
-          <div class="field"><div class="label"><div class="t">Basic Arm</div><div class="h">Basic CG arm (BARM)</div></div><input type="number" id="basicArm" step="0.01" /><span class="unit">in</span></div>
+          <div class="field"><div class="label"><div class="t">Basic Mass</div><div class="h">Empty weighed mass (BM)</div></div><input type="number" id="basicMass" /><span class="unit" data-u="mass">lb</span></div>
+          <div class="field"><div class="label"><div class="t">Basic Arm</div><div class="h">Basic CG arm (BARM)</div></div><input type="number" id="basicArm" step="0.001" /><span class="unit" data-u="arm">in</span></div>
         </div>
         <div class="card">
-          <div class="card-head"><h2>Maximum Weights</h2><div class="sub">structural limits — lb</div></div>
+          <div class="card-head"><h2>Maximum Weights</h2><div class="sub">structural · <span data-u="mass">lb</span></div></div>
           <div class="grid2">
             <div class="field"><div class="label"><div class="t">MRW</div><div class="h">Max ramp</div></div><input type="number" id="cfg_mrw" /></div>
             <div class="field"><div class="label"><div class="t">MTOM</div><div class="h">Max takeoff</div></div><input type="number" id="cfg_mtom" /></div>
@@ -380,8 +393,13 @@ textarea { width: 100%; min-height: 88px; border: 1px solid var(--line-strong); 
           </div>
         </div>
         <div class="card">
-          <div class="card-head"><h2>Reset</h2></div>
-          <button class="btn ghost" id="resetDefault">Reset aircraft to sample</button>
+          <div class="card-head"><h2>Fleet</h2><div class="sub">this aircraft</div></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn" id="dupAircraft">Duplicate</button>
+            <button class="btn ghost" id="delAircraft" style="color:var(--red)">Delete</button>
+            <button class="btn ghost" id="resetDefault">Reset to template</button>
+          </div>
+          <p class="hint">Use the aircraft name in the top bar to switch or add aircraft.</p>
         </div>
       </section>
 
@@ -417,8 +435,8 @@ textarea { width: 100%; min-height: 88px; border: 1px solid var(--line-strong); 
         <div class="card">
           <div class="card-head"><h2>MAC</h2></div>
           <div class="grid2">
-            <div class="field"><div class="label"><div class="t">LEMAC</div></div><input type="number" id="cfg_lemac" step="0.001" /><span class="unit">in</span></div>
-            <div class="field"><div class="label"><div class="t">MAC length</div></div><input type="number" id="cfg_maclen" step="0.001" /><span class="unit">in</span></div>
+            <div class="field"><div class="label"><div class="t">LEMAC</div></div><input type="number" id="cfg_lemac" step="0.001" /><span class="unit" data-u="arm">in</span></div>
+            <div class="field"><div class="label"><div class="t">MAC length</div></div><input type="number" id="cfg_maclen" step="0.001" /><span class="unit" data-u="arm">in</span></div>
           </div>
           <p class="hint">%MAC = (Arm − LEMAC) / MACLEN × 100</p>
         </div>
@@ -855,8 +873,7 @@ function check(value, max) {
 
 /* ===== web/default-aircraft.js ===== */
 
-// Auto-mirrored from engine/sample-aircraft.json so the app opens from file:// with no server.
-// Keep in sync with that file (the JSON is canonical for the Node tests).
+// Auto-mirrored from engine/sample-aircraft.json — keep in sync (JSON is canonical).
 const DEFAULT_AIRCRAFT = {
   "id": "d-abei",
   "name": "D-ABEI",
@@ -890,8 +907,8 @@ const DEFAULT_AIRCRAFT = {
 
   "stations": {
     "crew": [
-      { "id": "cpt", "label": "Captain", "arm": -310.0, "_placeholder": true },
-      { "id": "fo", "label": "First Officer", "arm": -310.0, "_placeholder": true }
+      { "id": "cpt", "label": "Captain", "arm": -310.0, "mass": 200, "_placeholder": true },
+      { "id": "fo", "label": "First Officer", "arm": -310.0, "mass": 200, "_placeholder": true }
     ],
     "pantry": [
       { "id": "pantryA", "label": "Forward galley", "mass": 300, "arm": -280.0, "_placeholder": true }
@@ -930,7 +947,97 @@ const DEFAULT_AIRCRAFT = {
       "fwdLimit": [[0,-48.220],[885,-48.220],[1770,-29.742],[2655,-26.133],[3541,-21.350],[4426,-17.603],[5311,-14.537],[6196,-12.108],[7081,-11.253],[7966,-10.550],[8852,-9.930],[9737,-9.410],[10622,-8.963],[11507,-8.563],[12392,-8.192],[13277,-7.835],[14162,-7.479],[15048,-7.116],[15933,-6.737],[16818,-6.336],[17703,-5.900],[18588,-5.429],[19473,-4.935],[20359,-4.411],[21244,-3.898],[22129,-4.538],[23014,-5.531],[23899,-6.041],[24784,-6.164],[25670,-6.086],[28325,-5.516],[30095,-6.345],[33800,-5.649]],
       "aftLimit": [[0,94.620],[885,94.620],[1770,62.205],[2655,56.191],[3541,53.508],[4426,48.979],[5311,45.250],[6196,42.754],[7081,40.077],[7966,37.418],[8852,34.893],[9737,32.518],[10622,30.270],[11507,28.123],[12392,26.037],[13277,23.983],[14162,22.562],[15048,22.302],[15933,21.660],[16818,20.644],[23369,14.857],[30095,7.874],[33800,5.837]]
     }
-  ]
+  ],
+
+  "seedLoad": {
+    "flightNo": "TRM-204", "route": "ESSA→EGLL",
+    "pantry": { "pantryA": true },
+    "pax": { "s1": "male", "s2": "female", "s3": "male", "s4": "female", "s5": "male", "s6": "female" },
+    "cargo": { "aftHold": 600 },
+    "fuel": { "ramp": 20400, "taxi": 400, "trip": 14000 }
+  }
+}
+;
+
+
+/* ===== web/atr-aircraft.js ===== */
+
+// Auto-mirrored from engine/atr.json — keep in sync (JSON is canonical).
+const ATR_AIRCRAFT = {
+  "id": "atr72-eigpp",
+  "name": "EI-GPP",
+  "_note": "ATR 72. Index/MAC/basic/MZFM, crew, the Main fuel-arm table, the section row arms and the CG envelope are supplied values. MTOM/MLM/MRW and cargo/pantry arms marked _placeholder.",
+  "units": { "mass": "kg", "arm": "m" },
+
+  "index": { "sta": 14.18, "scale": 150.0, "offset": 0.0 },
+  "mac": { "lemac": 13.604, "maclen": 2.303 },
+
+  "limits": { "mzfm": 21000, "mtom": 23000, "mlm": 22350, "mrw": 23100, "_placeholder": "mtom/mlm/mrw typical ATR72-600; confirm from AFM" },
+
+  "envelopes": {
+    "TOL": { "fwd": [[13000, 19.58], [18000, 18.03], [23000, 24.0]], "aft": [[13000, 31.42], [23000, 33.85]] },
+    "FLT": { "fwd": [[13000, 19.58], [18000, 18.03], [23000, 24.0]], "aft": [[13000, 31.42], [23000, 33.85]] }
+  },
+  "cgLimits": { "min": -45, "max": 55 },
+
+  "basic": { "mass": 13462, "arm": 14.032, "label": "Basic Mass / Basic Arm (EI-GPP weighing)" },
+
+  "stations": {
+    "crew": [
+      { "id": "cpt", "label": "Captain", "arm": 4.54, "mass": 85 },
+      { "id": "fo", "label": "First Officer", "arm": 4.54, "mass": 85 },
+      { "id": "third", "label": "Third Member", "arm": 5.5, "mass": 85 },
+      { "id": "fwdca", "label": "Fwd CA", "arm": 7.188, "mass": 75 },
+      { "id": "aftca", "label": "Aft CA", "arm": 22.172, "mass": 75 }
+    ],
+    "pantry": [
+      { "id": "galley", "label": "Aft galley", "mass": 50, "arm": 22.0, "_placeholder": true }
+    ],
+    "cargo": [
+      { "id": "fwdHold", "label": "Forward hold", "arm": 6.5, "maxMass": 500, "_placeholder": true },
+      { "id": "aftHold", "label": "Aft hold", "arm": 22.6, "maxMass": 700, "_placeholder": true }
+    ]
+  },
+
+  "cabinRows": [
+    { "id": "r1", "label": "1", "section": "A", "arm": 8.466, "capacity": 4 },
+    { "id": "r2", "label": "2", "section": "A", "arm": 9.203, "capacity": 4 },
+    { "id": "r3", "label": "3", "section": "A", "arm": 9.940, "capacity": 4 },
+    { "id": "r4", "label": "4", "section": "A", "arm": 10.676, "capacity": 4 },
+    { "id": "r5", "label": "5", "section": "A", "arm": 11.413, "capacity": 4 },
+    { "id": "r6", "label": "6", "section": "A", "arm": 12.149, "capacity": 4 },
+    { "id": "r7", "label": "7", "section": "B", "arm": 12.886, "capacity": 4 },
+    { "id": "r8", "label": "8", "section": "B", "arm": 13.623, "capacity": 4 },
+    { "id": "r9", "label": "9", "section": "B", "arm": 14.359, "capacity": 4 },
+    { "id": "r10", "label": "10", "section": "B", "arm": 15.096, "capacity": 4 },
+    { "id": "r11", "label": "11", "section": "B", "arm": 15.832, "capacity": 4 },
+    { "id": "r12", "label": "12", "section": "B", "arm": 16.569, "capacity": 4 },
+    { "id": "r13", "label": "13", "section": "B", "arm": 17.306, "capacity": 4 },
+    { "id": "r14", "label": "14", "section": "C", "arm": 18.042, "capacity": 4 },
+    { "id": "r15", "label": "15", "section": "C", "arm": 18.779, "capacity": 4 },
+    { "id": "r16", "label": "16", "section": "C", "arm": 19.515, "capacity": 4 },
+    { "id": "r17", "label": "17", "section": "C", "arm": 20.252, "capacity": 4 },
+    { "id": "r18", "label": "18", "section": "C", "arm": 20.989, "capacity": 4 }
+  ],
+
+  "standardMasses": { "adult": 84, "adultMale": 88, "adultFemale": 70, "child": 35, "infant": 0, "stretcher": 120 },
+
+  "tanks": [
+    {
+      "name": "Main",
+      "maxMass": 5000,
+      "minReserve": 75,
+      "fillOrder": 1,
+      "burnOrder": 1,
+      "table": [[0,14.590],[157,14.590],[314,14.535],[471,14.505],[628,14.488],[785,14.477],[942,14.470],[1099,14.466],[1256,14.463],[1413,14.460],[1570,14.458],[1727,14.457],[1884,14.456],[2041,14.455],[2198,14.455],[2355,14.455],[2512,14.454],[2669,14.453],[2826,14.452],[2983,14.452],[3140,14.452],[3297,14.452],[3454,14.451],[3611,14.451],[3768,14.450],[3925,14.450],[4082,14.448],[4239,14.446],[4396,14.444],[4553,14.441],[4710,14.438],[4867,14.434],[5000,14.430]]
+    }
+  ],
+
+  "seedLoad": {
+    "flightNo": "EIN-72", "route": "EIDW→EGLC",
+    "rows": { "r10": 4, "r11": 4, "r12": 4, "r13": 4, "r14": 4, "r15": 2 },
+    "fuel": { "ramp": 2500, "taxi": 40, "trip": 1500 }
+  }
 }
 ;
 
@@ -1058,49 +1165,81 @@ function renderEnvelopeSVG(aircraft, result, opts = {}) {
 
 
 
-const LS_AC = 'mb.aircraft.v4';
-const LS_LOAD = 'mb.load.v4';
 
-let aircraft = load(LS_AC) || structuredClone(DEFAULT_AIRCRAFT);
-let state = load(LS_LOAD) || freshLoad();
+const CATALOG = [DEFAULT_AIRCRAFT, ATR_AIRCRAFT]; // built-in aircraft the fleet seeds from
+const LS_FLEET = 'mb.fleet.v5';
+const LS_LOADS = 'mb.loads.v5';
+const LS_SEL = 'mb.selected.v5';
+
+let fleet = load(LS_FLEET) || CATALOG.map((a) => structuredClone(a));
+let loads = load(LS_LOADS) || {};
+let selected = load(LS_SEL) || fleet[0].id;
+let aircraft = fleet.find((a) => a.id === selected) || fleet[0];
+let state = loads[aircraft.id] || (loads[aircraft.id] = freshLoad(aircraft));
 let brush = 'male';
 
 function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
 function save() {
-  localStorage.setItem(LS_AC, JSON.stringify(aircraft));
-  localStorage.setItem(LS_LOAD, JSON.stringify(state));
+  loads[aircraft.id] = state;
+  localStorage.setItem(LS_FLEET, JSON.stringify(fleet));
+  localStorage.setItem(LS_LOADS, JSON.stringify(loads));
+  localStorage.setItem(LS_SEL, JSON.stringify(selected));
+}
+function switchAircraft(id) {
+  loads[aircraft.id] = state;
+  selected = id;
+  aircraft = fleet.find((a) => a.id === id);
+  state = loads[id] || (loads[id] = freshLoad(aircraft));
+  save(); renderAll();
 }
 
-// Pre-filled, realistic, in-envelope flight so the app opens populated.
-function freshLoad() {
+// Unit labels come from the selected aircraft.
+function massU() { return aircraft.units?.mass || 'lb'; }
+function armU() { return aircraft.units?.arm || 'in'; }
+function setUnits() {
+  document.querySelectorAll('[data-u="mass"]').forEach((e) => e.textContent = massU());
+  document.querySelectorAll('[data-u="arm"]').forEach((e) => e.textContent = armU());
+}
+
+// Per-aircraft demo flight, seeded from the aircraft's seedLoad.
+function freshLoad(ac) {
+  const seed = ac.seedLoad || {};
   return {
-    flight: { no: 'TRM-204', route: 'ESSA→EGLL', alt: 'EGKK' },
-    basicMass: aircraft.basic?.mass ?? 0,
-    basicArm: aircraft.basic?.arm ?? aircraft.index.sta,
-    crew: Object.fromEntries((aircraft.stations.crew || []).map((c) => [c.id, 200])),
-    pantry: { pantryA: true },
-    pax: { s1: 'male', s2: 'female', s3: 'male', s4: 'female', s5: 'male', s6: 'female' },
-    cargo: { aftHold: 600 },
-    fuel: { ramp: 20400, taxi: 400, trip: 14000 },
+    flight: { no: seed.flightNo || '', route: seed.route || '', alt: seed.alt || '' },
+    basicMass: ac.basic?.mass ?? 0,
+    basicArm: ac.basic?.arm ?? (ac.index?.sta ?? 0),
+    crew: Object.fromEntries((ac.stations?.crew || []).map((c) => [c.id, c.mass ?? (ac.units?.mass === 'kg' ? 85 : 200)])),
+    pantry: seed.pantry || (ac.stations?.pantry?.[0] ? { [ac.stations.pantry[0].id]: true } : {}),
+    pax: seed.pax || {},
+    rows: seed.rows || {},
+    cargo: seed.cargo || {},
+    fuel: seed.fuel || { ramp: 0, taxi: 0, trip: 0 },
   };
 }
 
 // ---- engine input -----------------------------------------------------------
 function buildLoad() {
   const sm = aircraft.standardMasses || {};
-  const stdMass = { male: sm.adultMale ?? 200, female: sm.adultFemale ?? 165, child: sm.child ?? 75, stretcher: sm.stretcher ?? 250 };
-  const crew = (aircraft.stations.crew || [])
+  const stdMass = { male: sm.adultMale ?? 200, female: sm.adultFemale ?? 165, child: sm.child ?? 75, stretcher: sm.stretcher ?? 250, adult: sm.adult ?? sm.adultMale ?? 200 };
+  const crew = (aircraft.stations?.crew || [])
     .map((c) => ({ mass: Number(state.crew[c.id]) || 0, arm: c.arm })).filter((x) => x.mass > 0);
-  const pantry = (aircraft.stations.pantry || [])
+  const pantry = (aircraft.stations?.pantry || [])
     .filter((p) => state.pantry[p.id]).map((p) => ({ mass: p.mass, arm: p.arm }));
-  const pax = Object.entries(state.pax).filter(([, t]) => t)
+  const pax = Object.entries(state.pax || {}).filter(([, t]) => t)
     .map(([id, t]) => ({ mass: stdMass[t], arm: seatArm(id) }));
-  const cargo = (aircraft.stations.cargo || [])
+  // Section seating: each row carries a passenger count at the row arm.
+  if (aircraft.cabinRows) {
+    for (const r of aircraft.cabinRows) {
+      const n = Number(state.rows?.[r.id]) || 0;
+      if (n > 0) pax.push({ mass: n * stdMass.adult, arm: r.arm });
+    }
+  }
+  const cargo = (aircraft.stations?.cargo || [])
     .map((h) => ({ mass: Number(state.cargo[h.id]) || 0, arm: h.arm })).filter((x) => x.mass > 0);
   return { basicMass: +state.basicMass, basicArm: +state.basicArm, crew, pantry, pax, cargo, fuel: state.fuel };
 }
-function seatArm(id) { return (aircraft.stations.pax.find((s) => s.id === id) || {}).arm; }
-function stdMassFor(t) { const sm = aircraft.standardMasses || {}; return { male: sm.adultMale, female: sm.adultFemale, child: sm.child, stretcher: sm.stretcher ?? 250 }[t]; }
+function seatArm(id) { return (aircraft.stations?.pax?.find((s) => s.id === id) || {}).arm; }
+function stdMassFor(t) { const sm = aircraft.standardMasses || {}; return { male: sm.adultMale, female: sm.adultFemale, child: sm.child, stretcher: sm.stretcher ?? 250, adult: sm.adult ?? sm.adultMale }[t]; }
 
 // ---- icons ------------------------------------------------------------------
 const I = {
@@ -1153,10 +1292,49 @@ function showPanel() {
   else if (activePanel === 'envelope') renderEnvelope();
 }
 
+// ---- aircraft picker --------------------------------------------------------
+el('acPick').onclick = () => {
+  const opts = fleet.map((a) => ({ label: a.name + '  ·  ' + (a.id === selected ? 'current' : (a.units?.mass || 'lb')), value: a.id, active: a.id === selected }));
+  opts.push({ label: '＋ Add aircraft…', value: '__add' });
+  popupMenu(el('acPick'), opts, (v) => {
+    if (v === '__add') return addAircraftFlow();
+    switchAircraft(v);
+  });
+};
+function addAircraftFlow() {
+  // Offer catalog aircraft not already in the fleet, plus a blank.
+  const inFleet = new Set(fleet.map((a) => a.id));
+  const opts = CATALOG.filter((a) => !inFleet.has(a.id)).map((a) => ({ label: a.name, value: 'cat:' + a.id }));
+  opts.push({ label: 'Blank aircraft', value: 'blank' });
+  popupMenu(el('acPick'), opts, (v) => {
+    let ac;
+    if (v === 'blank') ac = blankAircraft();
+    else ac = structuredClone(CATALOG.find((a) => a.id === v.slice(4)));
+    // ensure unique id
+    let id = ac.id, n = 2; while (fleet.some((a) => a.id === id)) id = ac.id + '-' + n++;
+    ac.id = id;
+    fleet.push(ac); save(); switchAircraft(id);
+  });
+}
+function blankAircraft() {
+  return {
+    id: 'new-ac', name: 'NEW-AC', units: { mass: 'lb', arm: 'in' },
+    index: { sta: 0, scale: 1000, offset: 0 }, mac: { lemac: 0, maclen: 100 },
+    limits: { mrw: 0, mtom: 0, mzfm: 0, mlm: 0 },
+    envelopes: { TOL: { fwd: [[0, 20], [10000, 20]], aft: [[0, 35], [10000, 35]] }, FLT: { fwd: [[0, 20], [10000, 20]], aft: [[0, 35], [10000, 35]] } },
+    basic: { mass: 0, arm: 0 },
+    stations: { crew: [], pantry: [], pax: [], cargo: [] },
+    standardMasses: { adultMale: 200, adultFemale: 165, child: 75, stretcher: 250, adult: 195 },
+    tanks: [],
+  };
+}
+
 // ---- panels -----------------------------------------------------------------
 function renderAll() {
   el('acReg').textContent = aircraft.name;
-  el('flightNo').textContent = state.flight?.no || '';
+  el('acType').textContent = aircraft.cabinRows ? 'section' : 'seatmap';
+  setUnits();
+  el('flightNo').textContent = state.flight?.no || '—';
   el('flightRoute').textContent = state.flight?.route || '';
   bindText('fl_no', () => state.flight.no, (v) => state.flight.no = v);
   bindText('fl_route', () => state.flight.route, (v) => state.flight.route = v);
@@ -1170,36 +1348,42 @@ function bindText(id, get, set) { const e = el(id); e.value = get() || ''; e.oni
 
 function renderCrew() {
   const host = el('crewList'); host.innerHTML = '';
-  for (const c of aircraft.stations.crew || []) {
-    host.appendChild(field(c.label, `arm ${c.arm} in`, stepper(state.crew[c.id], 10, (v) => { state.crew[c.id] = v; recompute(); save(); }), 'lb'));
+  for (const c of aircraft.stations?.crew || []) {
+    if (state.crew[c.id] == null) state.crew[c.id] = c.mass ?? 0;
+    host.appendChild(field(c.label, `arm ${c.arm} ${armU()}`, stepper(state.crew[c.id], 5, (v) => { state.crew[c.id] = v; recompute(); save(); }), massU()));
   }
 }
 
 function renderPantry() {
   const host = el('pantryList'); host.innerHTML = '';
-  for (const p of aircraft.stations.pantry || []) {
+  for (const p of aircraft.stations?.pantry || []) {
     const sw = toggle(!!state.pantry[p.id], (on) => { state.pantry[p.id] = on; recompute(); save(); });
-    host.appendChild(field(p.label, `${p.mass} lb · arm ${p.arm} in`, sw));
+    host.appendChild(field(p.label, `${p.mass} ${massU()} · arm ${p.arm} ${armU()}`, sw));
   }
 }
 
 const PAX_CATS = [['male', 'Male'], ['female', 'Female'], ['child', 'Child']];
 function renderPaxBrush() {
-  const host = el('paxBrush'); host.innerHTML = '';
+  const host = el('paxBrush');
+  // Section seating has no per-seat category brush.
+  host.style.display = aircraft.cabinRows ? 'none' : '';
+  host.innerHTML = '';
+  if (aircraft.cabinRows) return;
   for (const [k, label] of PAX_CATS) {
     const b = document.createElement('button');
     b.className = brush === k ? 'on' : '';
-    b.textContent = `${label} · ${stdMassFor(k)}lb`;
+    b.textContent = `${label} · ${stdMassFor(k)}${massU()}`;
     b.onclick = () => { brush = k; renderPaxBrush(); };
     host.appendChild(b);
   }
 }
-// Lay the cabin out fore-to-aft by row (rows ordered by mean arm). Each row is a
-// fixed grid of rail columns (1..maxRail), so a seat keeps its lateral rail
-// position even when it is the only seat in its row. Empty rails hold a spacer.
+
+// Passengers: section loader (counts per row, grouped by section) for
+// section-seating aircraft, otherwise the tap-a-seat cabin map.
 function renderCabin() {
+  if (aircraft.cabinRows) return renderSectionCabin();
   const host = el('cabin'); host.innerHTML = '';
-  const seats = aircraft.stations.pax || [];
+  const seats = aircraft.stations?.pax || [];
   if (!seats.length) { host.innerHTML = '<p class="hint">No seats. Add them in Dispatch &rsaquo; Cabin Seats.</p>'; el('paxCount').textContent = '0 pax'; return; }
   const rows = {};
   for (const s of seats) { const r = s.row ?? 0; (rows[r] = rows[r] || []).push(s); }
@@ -1225,13 +1409,38 @@ function renderCabin() {
   }
   el('paxCount').textContent = `${Object.values(state.pax).filter(Boolean).length} occupied`;
 }
+// Section-seating cabin: a passenger count per row, grouped by section.
+function renderSectionCabin() {
+  const host = el('cabin'); host.innerHTML = '';
+  state.rows = state.rows || {};
+  const bySec = {};
+  for (const r of aircraft.cabinRows) (bySec[r.section ?? '—'] = bySec[r.section ?? '—'] || []).push(r);
+  let total = 0;
+  for (const sec of Object.keys(bySec)) {
+    const block = div('section-block');
+    const head = div('section-head');
+    block.appendChild(head);
+    let secTotal = 0;
+    for (const r of bySec[sec]) {
+      const n = Number(state.rows[r.id]) || 0; secTotal += n;
+      const row = div('row');
+      row.innerHTML = `<label>Row ${r.label} · arm ${r.arm} ${armU()}</label>`;
+      row.appendChild(stepper(n, 1, (v) => { state.rows[r.id] = v; recompute(); save(); renderSectionCabin(); }, r.capacity ?? 4));
+      block.appendChild(row);
+    }
+    total += secTotal;
+    head.innerHTML = `<span>Section ${sec}</span><span class="pill blue flat">${secTotal} pax</span>`;
+    host.appendChild(block);
+  }
+  el('paxCount').textContent = `${total} pax`;
+}
 function stretcherEl(s) {
   const occ = state.pax[s.id] === 'stretcher';
   const d = div('stretcher' + (occ ? ' occupied' : ''));
   const len = s.length ?? 78;
   d.style.minHeight = Math.max(44, Math.min(110, len * 0.6)) + 'px';
   d.innerHTML = `<span class="lbl">${s.label ?? s.id} · STRETCHER</span>` +
-    `<span class="meta">${occ ? stdMassFor('stretcher') + ' lb' : 'len ' + len + ' in · arm ' + s.arm}</span>`;
+    `<span class="meta">${occ ? stdMassFor('stretcher') + ' ' + massU() : 'len ' + len + ' ' + armU() + ' · arm ' + s.arm}</span>`;
   d.onclick = () => {
     if (state.pax[s.id] === 'stretcher') delete state.pax[s.id]; else state.pax[s.id] = 'stretcher';
     renderCabin(); renderNav(); recompute(); save();
@@ -1243,7 +1452,7 @@ function seatEl(s) {
   const face = s.rot ? ' face-' + String(s.rot).toLowerCase() : '';
   const d = div('seat ' + (type || 'empty') + face);
   const tag = { male: 'M', female: 'F', child: 'C' }[type] || '';
-  d.innerHTML = `<span class="ic">${type ? tag : (s.label ?? s.id)}</span><span class="kg">${type ? stdMassFor(type) + 'lb' : 'arm ' + s.arm}</span>`;
+  d.innerHTML = `<span class="ic">${type ? tag : (s.label ?? s.id)}</span><span class="kg">${type ? stdMassFor(type) + massU() : 'arm ' + s.arm}</span>`;
   d.onclick = () => {
     if (state.pax[s.id] === brush) delete state.pax[s.id];
     else state.pax[s.id] = brush;
@@ -1254,17 +1463,18 @@ function seatEl(s) {
 
 function renderCargo() {
   const host = el('cargoList'); host.innerHTML = '';
-  for (const h of aircraft.stations.cargo || []) {
-    host.appendChild(field(h.label, `arm ${h.arm} in · max ${h.maxMass} lb`,
-      stepper(state.cargo[h.id] || 0, 50, (v) => { state.cargo[h.id] = v; recompute(); save(); }), 'lb'));
+  for (const h of aircraft.stations?.cargo || []) {
+    host.appendChild(field(h.label, `arm ${h.arm} ${armU()} · max ${h.maxMass} ${massU()}`,
+      stepper(state.cargo[h.id] || 0, massU() === 'kg' ? 25 : 50, (v) => { state.cargo[h.id] = v; recompute(); save(); }, h.maxMass), massU()));
   }
 }
 
 const FUEL_FIELDS = [['ramp', 'Ramp (block)'], ['taxi', 'Taxi'], ['trip', 'Trip']];
 function renderFuel() {
   const host = el('fuelInputs'); host.innerHTML = '';
+  const step = massU() === 'kg' ? 25 : 50;
   for (const [k, label] of FUEL_FIELDS) {
-    host.appendChild(field(label, '', stepper(state.fuel[k], 50, (v) => { state.fuel[k] = v; recompute(); save(); }), 'lb'));
+    host.appendChild(field(label, '', stepper(state.fuel[k], step, (v) => { state.fuel[k] = v; recompute(); save(); }), massU()));
   }
 }
 
@@ -1293,16 +1503,16 @@ function renderSummary(r) {
 }
 function renderFuelDerived(r) {
   const f = r.fuel;
-  const cell = (v, k, accent) => `<div class="readout ${accent ? 'accent' : ''}"><div class="v">${fmt(v)} <small>lb</small></div><div class="k">${k}</div></div>`;
+  const cell = (v, k, accent) => `<div class="readout ${accent ? 'accent' : ''}"><div class="v">${fmt(v)} <small>${massU()}</small></div><div class="k">${k}</div></div>`;
   el('fuelDerived').innerHTML = cell(f.takeoff, 'Takeoff', 1) + cell(f.landing, 'Landing', 1) + cell(f.trip, 'Trip') + cell(f.ramp, 'Ramp');
   let msg = f.sufficient
-    ? pill('good', `Landing ≥ minimum reserve (${fmt(f.minReserve)} lb)`)
-    : pill('bad', `Landing below minimum reserve (${fmt(f.minReserve)} lb)`);
+    ? pill('good', `Landing ≥ minimum reserve (${fmt(f.minReserve)} ${massU()})`)
+    : pill('bad', `Landing below minimum reserve (${fmt(f.minReserve)} ${massU()})`);
   const fl = r.fuelLimits;
   if (fl && fl.takeoff.checked) {
     const ok = fl.takeoff.inside && fl.landing.inside;
     const t = fl.takeoff.tanks[0];
-    const detail = t ? ` (CG ${t.arm.toFixed(1)} in vs ${t.fwd.toFixed(1)}…${t.aft.toFixed(1)})` : '';
+    const detail = t ? ` (CG ${t.arm.toFixed(1)} ${armU()} vs ${t.fwd.toFixed(1)}…${t.aft.toFixed(1)})` : '';
     msg += ' ' + (ok ? pill('good', 'Fuel CG within tank limits') : pill('bad', 'Fuel CG outside tank limits' + detail));
   }
   el('fuelMsg').innerHTML = msg;
@@ -1328,9 +1538,41 @@ function renderAircraft() {
 }
 
 // ---- dispatch: cabin seats --------------------------------------------------
+function renderRowEditor(host) {
+  const rows = aircraft.cabinRows || [];
+  const body = rows.map((r, i) =>
+    `<tr>
+      <td><input data-i="${i}" data-k="label" value="${r.label}" style="width:46px"></td>
+      <td><input data-i="${i}" data-k="section" value="${r.section ?? ''}" style="width:44px"></td>
+      <td><input type="number" step="0.001" data-i="${i}" data-k="arm" value="${r.arm}" style="width:84px"></td>
+      <td><input type="number" data-i="${i}" data-k="capacity" value="${r.capacity ?? 4}" style="width:50px"></td>
+      <td><button class="btn small ghost" data-del="${i}" style="color:var(--red)">✕</button></td>
+    </tr>`).join('');
+  host.innerHTML = `<table class="vtable"><thead><tr><th>Row</th><th>Sect</th><th>Arm (${armU()})</th><th>Cap</th><th></th></tr></thead><tbody>${body}</tbody></table>
+    <button class="btn small" id="addRowBtn" style="margin-top:8px">+ Add row</button>
+    <p class="hint">Section seating: pilots enter a passenger count per row (× standard mass ${stdMassFor('adult')} ${massU()}). Rows render grouped by section, fore-to-aft by arm.</p>`;
+  host.querySelectorAll('input[data-i]').forEach((inp) => inp.oninput = () => {
+    const r = aircraft.cabinRows[+inp.dataset.i]; const k = inp.dataset.k;
+    r[k] = (k === 'label' || k === 'section') ? inp.value : Number(inp.value);
+    save(); recompute();
+  });
+  host.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => {
+    const r = aircraft.cabinRows[+b.dataset.del];
+    if (state.rows) delete state.rows[r.id];
+    aircraft.cabinRows.splice(+b.dataset.del, 1);
+    renderSeats(); renderCabin(); recompute(); save();
+  });
+  el('addRowBtn').onclick = () => {
+    const ids = aircraft.cabinRows.map((r) => r.id);
+    let n = aircraft.cabinRows.length + 1, id = 'r' + n; while (ids.includes(id)) { n++; id = 'r' + n; }
+    aircraft.cabinRows.push({ id, label: String(n), section: '', arm: 0, capacity: 4 });
+    renderSeats(); renderCabin(); recompute(); save();
+  };
+}
 function renderSeats() {
   const host = el('seatEditors');
-  const seats = aircraft.stations.pax || [];
+  if (aircraft.cabinRows) return renderRowEditor(host);
+  const seats = aircraft.stations?.pax || [];
   const rows = seats.map((s, i) => {
     const isStr = s.type === 'stretcher';
     const typeCell = `<button class="btn small" data-type="${i}" style="min-width:52px">${isStr ? 'STR' : 'SEAT'}</button>` +
@@ -1397,7 +1639,7 @@ function ptTableHTML(title, arr, t) {
       <td><input type="number" step="0.01" data-t="${t}" data-i="${i}" data-f="1" value="${pt[1]}" style="width:84px"></td>
       <td><button class="btn small ghost" data-delrow="${t}" data-i="${i}">✕</button></td></tr>`).join('');
   return `<div style="font-size:12px;color:var(--muted);margin:12px 0 4px;font-weight:700;text-transform:uppercase;letter-spacing:.05em">${title}</div>
-    <table class="vtable"><thead><tr><th>Qty (lb)</th><th>Arm (in)</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="vtable"><thead><tr><th>Qty (${massU()})</th><th>Arm (${armU()})</th><th></th></tr></thead><tbody>${rows}</tbody></table>
     <button class="btn small" data-addrow="${t}">+ Add point</button>`;
 }
 function renderTanks() {
@@ -1458,7 +1700,7 @@ function renderEnvEditors() {
     const rows = curve.map((pt, i) =>
       `<tr><td><input type="number" data-i="${i}" data-f="0" value="${pt[0]}"></td><td><input type="number" step="0.1" data-i="${i}" data-f="1" value="${pt[1]}"></td><td><button class="btn small ghost" data-del="${i}">✕</button></td></tr>`).join('');
     det.innerHTML = `<summary>${label} <span style="color:var(--muted)">(${curve.length})</span></summary>
-      <table class="vtable"><thead><tr><th>Mass (lb)</th><th>%MAC</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <table class="vtable"><thead><tr><th>Mass (${massU()})</th><th>%MAC</th><th></th></tr></thead><tbody>${rows}</tbody></table>
       <button class="btn small" data-add="1">+ Add vertex</button>`;
     det.querySelectorAll('input').forEach((inp) => inp.oninput = () => { curve[+inp.dataset.i][+inp.dataset.f] = Number(inp.value); save(); recompute(); });
     det.querySelector('[data-add]').onclick = () => { const last = curve[curve.length - 1] || [26000, 25]; curve.push([last[0] + 1000, last[1]]); renderEnvEditors(); recompute(); save(); };
@@ -1471,7 +1713,28 @@ el('xmlImport').onclick = () => {
   try { parseLegacyXml(el('xmlIn').value); save(); renderDispatch(); recompute(); el('xmlIn').value = ''; alert('Imported. Review the values.'); }
   catch (e) { alert('Could not parse: ' + e.message); }
 };
-el('resetDefault').onclick = () => { if (confirm('Reset aircraft to the bundled sample?')) { aircraft = structuredClone(DEFAULT_AIRCRAFT); state = freshLoad(); save(); renderAll(); } };
+el('resetDefault').onclick = () => {
+  const tmpl = CATALOG.find((a) => a.id === aircraft.id);
+  if (!tmpl) { alert('No catalog template for this aircraft.'); return; }
+  if (!confirm('Reset this aircraft and its load to the bundled template?')) return;
+  const idx = fleet.findIndex((a) => a.id === aircraft.id);
+  fleet[idx] = structuredClone(tmpl); aircraft = fleet[idx];
+  state = loads[aircraft.id] = freshLoad(aircraft);
+  save(); renderAll();
+};
+el('dupAircraft').onclick = () => {
+  const copy = structuredClone(aircraft);
+  let id = aircraft.id + '-copy', n = 2; while (fleet.some((a) => a.id === id)) id = aircraft.id + '-copy' + n++;
+  copy.id = id; copy.name = aircraft.name + ' (copy)';
+  fleet.push(copy); save(); switchAircraft(id);
+};
+el('delAircraft').onclick = () => {
+  if (fleet.length <= 1) { alert('At least one aircraft is required.'); return; }
+  if (!confirm('Delete ' + aircraft.name + ' from the fleet?')) return;
+  fleet = fleet.filter((a) => a.id !== aircraft.id); delete loads[aircraft.id];
+  selected = fleet[0].id; aircraft = fleet[0]; state = loads[aircraft.id] || (loads[aircraft.id] = freshLoad(aircraft));
+  save(); renderAll();
+};
 function parseLegacyXml(xml) {
   const attr = (tag, name) => { const m = xml.match(new RegExp(`<${tag}[^>]*\\b${name}="([\\d.\\-]+)"`, 'i')); return m ? Number(m[1]) : null; };
   const pairs = (tag) => { const m = xml.match(new RegExp(`<${tag}>(.*?)</${tag}>`, 'is')); return m ? [...m[1].matchAll(/\(([\d.\-]+)\s*,\s*([\d.\-]+)\)/g)].map((g) => [Number(g[1]), Number(g[2])]) : null; };
@@ -1491,11 +1754,11 @@ function field(title, hint, control, unit) {
   if (unit) { const u = spanCls('unit', unit); f.appendChild(u); }
   return f;
 }
-function stepper(value, step, onChange) {
+function stepper(value, step, onChange, max) {
   const wrap = div('stepper');
   const minus = btn('−'), plus = btn('+');
   const inp = document.createElement('input'); inp.type = 'number'; inp.value = value;
-  const fire = (v) => { v = Math.max(0, Math.round(v)); inp.value = v; onChange(v); };
+  const fire = (v) => { v = Math.max(0, Math.round(v)); if (max != null) v = Math.min(v, max); inp.value = v; onChange(v); };
   minus.onclick = () => fire((+inp.value || 0) - step);
   plus.onclick = () => fire((+inp.value || 0) + step);
   inp.oninput = () => onChange(+inp.value || 0);

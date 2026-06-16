@@ -1,50 +1,82 @@
 import { computeLoadsheet } from '../engine/massbalance.mjs';
 import { renderEnvelopeSVG } from './chart.js';
 import DEFAULT_AIRCRAFT from './default-aircraft.js';
+import ATR_AIRCRAFT from './atr-aircraft.js';
 
-const LS_AC = 'mb.aircraft.v4';
-const LS_LOAD = 'mb.load.v4';
+const CATALOG = [DEFAULT_AIRCRAFT, ATR_AIRCRAFT]; // built-in aircraft the fleet seeds from
+const LS_FLEET = 'mb.fleet.v5';
+const LS_LOADS = 'mb.loads.v5';
+const LS_SEL = 'mb.selected.v5';
 
-let aircraft = load(LS_AC) || structuredClone(DEFAULT_AIRCRAFT);
-let state = load(LS_LOAD) || freshLoad();
+let fleet = load(LS_FLEET) || CATALOG.map((a) => structuredClone(a));
+let loads = load(LS_LOADS) || {};
+let selected = load(LS_SEL) || fleet[0].id;
+let aircraft = fleet.find((a) => a.id === selected) || fleet[0];
+let state = loads[aircraft.id] || (loads[aircraft.id] = freshLoad(aircraft));
 let brush = 'male';
 
 function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
 function save() {
-  localStorage.setItem(LS_AC, JSON.stringify(aircraft));
-  localStorage.setItem(LS_LOAD, JSON.stringify(state));
+  loads[aircraft.id] = state;
+  localStorage.setItem(LS_FLEET, JSON.stringify(fleet));
+  localStorage.setItem(LS_LOADS, JSON.stringify(loads));
+  localStorage.setItem(LS_SEL, JSON.stringify(selected));
+}
+function switchAircraft(id) {
+  loads[aircraft.id] = state;
+  selected = id;
+  aircraft = fleet.find((a) => a.id === id);
+  state = loads[id] || (loads[id] = freshLoad(aircraft));
+  save(); renderAll();
 }
 
-// Pre-filled, realistic, in-envelope flight so the app opens populated.
-function freshLoad() {
+// Unit labels come from the selected aircraft.
+function massU() { return aircraft.units?.mass || 'lb'; }
+function armU() { return aircraft.units?.arm || 'in'; }
+function setUnits() {
+  document.querySelectorAll('[data-u="mass"]').forEach((e) => e.textContent = massU());
+  document.querySelectorAll('[data-u="arm"]').forEach((e) => e.textContent = armU());
+}
+
+// Per-aircraft demo flight, seeded from the aircraft's seedLoad.
+function freshLoad(ac) {
+  const seed = ac.seedLoad || {};
   return {
-    flight: { no: 'TRM-204', route: 'ESSA→EGLL', alt: 'EGKK' },
-    basicMass: aircraft.basic?.mass ?? 0,
-    basicArm: aircraft.basic?.arm ?? aircraft.index.sta,
-    crew: Object.fromEntries((aircraft.stations.crew || []).map((c) => [c.id, 200])),
-    pantry: { pantryA: true },
-    pax: { s1: 'male', s2: 'female', s3: 'male', s4: 'female', s5: 'male', s6: 'female' },
-    cargo: { aftHold: 600 },
-    fuel: { ramp: 20400, taxi: 400, trip: 14000 },
+    flight: { no: seed.flightNo || '', route: seed.route || '', alt: seed.alt || '' },
+    basicMass: ac.basic?.mass ?? 0,
+    basicArm: ac.basic?.arm ?? (ac.index?.sta ?? 0),
+    crew: Object.fromEntries((ac.stations?.crew || []).map((c) => [c.id, c.mass ?? (ac.units?.mass === 'kg' ? 85 : 200)])),
+    pantry: seed.pantry || (ac.stations?.pantry?.[0] ? { [ac.stations.pantry[0].id]: true } : {}),
+    pax: seed.pax || {},
+    rows: seed.rows || {},
+    cargo: seed.cargo || {},
+    fuel: seed.fuel || { ramp: 0, taxi: 0, trip: 0 },
   };
 }
 
 // ---- engine input -----------------------------------------------------------
 function buildLoad() {
   const sm = aircraft.standardMasses || {};
-  const stdMass = { male: sm.adultMale ?? 200, female: sm.adultFemale ?? 165, child: sm.child ?? 75, stretcher: sm.stretcher ?? 250 };
-  const crew = (aircraft.stations.crew || [])
+  const stdMass = { male: sm.adultMale ?? 200, female: sm.adultFemale ?? 165, child: sm.child ?? 75, stretcher: sm.stretcher ?? 250, adult: sm.adult ?? sm.adultMale ?? 200 };
+  const crew = (aircraft.stations?.crew || [])
     .map((c) => ({ mass: Number(state.crew[c.id]) || 0, arm: c.arm })).filter((x) => x.mass > 0);
-  const pantry = (aircraft.stations.pantry || [])
+  const pantry = (aircraft.stations?.pantry || [])
     .filter((p) => state.pantry[p.id]).map((p) => ({ mass: p.mass, arm: p.arm }));
-  const pax = Object.entries(state.pax).filter(([, t]) => t)
+  const pax = Object.entries(state.pax || {}).filter(([, t]) => t)
     .map(([id, t]) => ({ mass: stdMass[t], arm: seatArm(id) }));
-  const cargo = (aircraft.stations.cargo || [])
+  // Section seating: each row carries a passenger count at the row arm.
+  if (aircraft.cabinRows) {
+    for (const r of aircraft.cabinRows) {
+      const n = Number(state.rows?.[r.id]) || 0;
+      if (n > 0) pax.push({ mass: n * stdMass.adult, arm: r.arm });
+    }
+  }
+  const cargo = (aircraft.stations?.cargo || [])
     .map((h) => ({ mass: Number(state.cargo[h.id]) || 0, arm: h.arm })).filter((x) => x.mass > 0);
   return { basicMass: +state.basicMass, basicArm: +state.basicArm, crew, pantry, pax, cargo, fuel: state.fuel };
 }
-function seatArm(id) { return (aircraft.stations.pax.find((s) => s.id === id) || {}).arm; }
-function stdMassFor(t) { const sm = aircraft.standardMasses || {}; return { male: sm.adultMale, female: sm.adultFemale, child: sm.child, stretcher: sm.stretcher ?? 250 }[t]; }
+function seatArm(id) { return (aircraft.stations?.pax?.find((s) => s.id === id) || {}).arm; }
+function stdMassFor(t) { const sm = aircraft.standardMasses || {}; return { male: sm.adultMale, female: sm.adultFemale, child: sm.child, stretcher: sm.stretcher ?? 250, adult: sm.adult ?? sm.adultMale }[t]; }
 
 // ---- icons ------------------------------------------------------------------
 const I = {
@@ -97,10 +129,49 @@ function showPanel() {
   else if (activePanel === 'envelope') renderEnvelope();
 }
 
+// ---- aircraft picker --------------------------------------------------------
+el('acPick').onclick = () => {
+  const opts = fleet.map((a) => ({ label: a.name + '  ·  ' + (a.id === selected ? 'current' : (a.units?.mass || 'lb')), value: a.id, active: a.id === selected }));
+  opts.push({ label: '＋ Add aircraft…', value: '__add' });
+  popupMenu(el('acPick'), opts, (v) => {
+    if (v === '__add') return addAircraftFlow();
+    switchAircraft(v);
+  });
+};
+function addAircraftFlow() {
+  // Offer catalog aircraft not already in the fleet, plus a blank.
+  const inFleet = new Set(fleet.map((a) => a.id));
+  const opts = CATALOG.filter((a) => !inFleet.has(a.id)).map((a) => ({ label: a.name, value: 'cat:' + a.id }));
+  opts.push({ label: 'Blank aircraft', value: 'blank' });
+  popupMenu(el('acPick'), opts, (v) => {
+    let ac;
+    if (v === 'blank') ac = blankAircraft();
+    else ac = structuredClone(CATALOG.find((a) => a.id === v.slice(4)));
+    // ensure unique id
+    let id = ac.id, n = 2; while (fleet.some((a) => a.id === id)) id = ac.id + '-' + n++;
+    ac.id = id;
+    fleet.push(ac); save(); switchAircraft(id);
+  });
+}
+function blankAircraft() {
+  return {
+    id: 'new-ac', name: 'NEW-AC', units: { mass: 'lb', arm: 'in' },
+    index: { sta: 0, scale: 1000, offset: 0 }, mac: { lemac: 0, maclen: 100 },
+    limits: { mrw: 0, mtom: 0, mzfm: 0, mlm: 0 },
+    envelopes: { TOL: { fwd: [[0, 20], [10000, 20]], aft: [[0, 35], [10000, 35]] }, FLT: { fwd: [[0, 20], [10000, 20]], aft: [[0, 35], [10000, 35]] } },
+    basic: { mass: 0, arm: 0 },
+    stations: { crew: [], pantry: [], pax: [], cargo: [] },
+    standardMasses: { adultMale: 200, adultFemale: 165, child: 75, stretcher: 250, adult: 195 },
+    tanks: [],
+  };
+}
+
 // ---- panels -----------------------------------------------------------------
 function renderAll() {
   el('acReg').textContent = aircraft.name;
-  el('flightNo').textContent = state.flight?.no || '';
+  el('acType').textContent = aircraft.cabinRows ? 'section' : 'seatmap';
+  setUnits();
+  el('flightNo').textContent = state.flight?.no || '—';
   el('flightRoute').textContent = state.flight?.route || '';
   bindText('fl_no', () => state.flight.no, (v) => state.flight.no = v);
   bindText('fl_route', () => state.flight.route, (v) => state.flight.route = v);
@@ -114,36 +185,42 @@ function bindText(id, get, set) { const e = el(id); e.value = get() || ''; e.oni
 
 function renderCrew() {
   const host = el('crewList'); host.innerHTML = '';
-  for (const c of aircraft.stations.crew || []) {
-    host.appendChild(field(c.label, `arm ${c.arm} in`, stepper(state.crew[c.id], 10, (v) => { state.crew[c.id] = v; recompute(); save(); }), 'lb'));
+  for (const c of aircraft.stations?.crew || []) {
+    if (state.crew[c.id] == null) state.crew[c.id] = c.mass ?? 0;
+    host.appendChild(field(c.label, `arm ${c.arm} ${armU()}`, stepper(state.crew[c.id], 5, (v) => { state.crew[c.id] = v; recompute(); save(); }), massU()));
   }
 }
 
 function renderPantry() {
   const host = el('pantryList'); host.innerHTML = '';
-  for (const p of aircraft.stations.pantry || []) {
+  for (const p of aircraft.stations?.pantry || []) {
     const sw = toggle(!!state.pantry[p.id], (on) => { state.pantry[p.id] = on; recompute(); save(); });
-    host.appendChild(field(p.label, `${p.mass} lb · arm ${p.arm} in`, sw));
+    host.appendChild(field(p.label, `${p.mass} ${massU()} · arm ${p.arm} ${armU()}`, sw));
   }
 }
 
 const PAX_CATS = [['male', 'Male'], ['female', 'Female'], ['child', 'Child']];
 function renderPaxBrush() {
-  const host = el('paxBrush'); host.innerHTML = '';
+  const host = el('paxBrush');
+  // Section seating has no per-seat category brush.
+  host.style.display = aircraft.cabinRows ? 'none' : '';
+  host.innerHTML = '';
+  if (aircraft.cabinRows) return;
   for (const [k, label] of PAX_CATS) {
     const b = document.createElement('button');
     b.className = brush === k ? 'on' : '';
-    b.textContent = `${label} · ${stdMassFor(k)}lb`;
+    b.textContent = `${label} · ${stdMassFor(k)}${massU()}`;
     b.onclick = () => { brush = k; renderPaxBrush(); };
     host.appendChild(b);
   }
 }
-// Lay the cabin out fore-to-aft by row (rows ordered by mean arm). Each row is a
-// fixed grid of rail columns (1..maxRail), so a seat keeps its lateral rail
-// position even when it is the only seat in its row. Empty rails hold a spacer.
+
+// Passengers: section loader (counts per row, grouped by section) for
+// section-seating aircraft, otherwise the tap-a-seat cabin map.
 function renderCabin() {
+  if (aircraft.cabinRows) return renderSectionCabin();
   const host = el('cabin'); host.innerHTML = '';
-  const seats = aircraft.stations.pax || [];
+  const seats = aircraft.stations?.pax || [];
   if (!seats.length) { host.innerHTML = '<p class="hint">No seats. Add them in Dispatch &rsaquo; Cabin Seats.</p>'; el('paxCount').textContent = '0 pax'; return; }
   const rows = {};
   for (const s of seats) { const r = s.row ?? 0; (rows[r] = rows[r] || []).push(s); }
@@ -169,13 +246,38 @@ function renderCabin() {
   }
   el('paxCount').textContent = `${Object.values(state.pax).filter(Boolean).length} occupied`;
 }
+// Section-seating cabin: a passenger count per row, grouped by section.
+function renderSectionCabin() {
+  const host = el('cabin'); host.innerHTML = '';
+  state.rows = state.rows || {};
+  const bySec = {};
+  for (const r of aircraft.cabinRows) (bySec[r.section ?? '—'] = bySec[r.section ?? '—'] || []).push(r);
+  let total = 0;
+  for (const sec of Object.keys(bySec)) {
+    const block = div('section-block');
+    const head = div('section-head');
+    block.appendChild(head);
+    let secTotal = 0;
+    for (const r of bySec[sec]) {
+      const n = Number(state.rows[r.id]) || 0; secTotal += n;
+      const row = div('row');
+      row.innerHTML = `<label>Row ${r.label} · arm ${r.arm} ${armU()}</label>`;
+      row.appendChild(stepper(n, 1, (v) => { state.rows[r.id] = v; recompute(); save(); renderSectionCabin(); }, r.capacity ?? 4));
+      block.appendChild(row);
+    }
+    total += secTotal;
+    head.innerHTML = `<span>Section ${sec}</span><span class="pill blue flat">${secTotal} pax</span>`;
+    host.appendChild(block);
+  }
+  el('paxCount').textContent = `${total} pax`;
+}
 function stretcherEl(s) {
   const occ = state.pax[s.id] === 'stretcher';
   const d = div('stretcher' + (occ ? ' occupied' : ''));
   const len = s.length ?? 78;
   d.style.minHeight = Math.max(44, Math.min(110, len * 0.6)) + 'px';
   d.innerHTML = `<span class="lbl">${s.label ?? s.id} · STRETCHER</span>` +
-    `<span class="meta">${occ ? stdMassFor('stretcher') + ' lb' : 'len ' + len + ' in · arm ' + s.arm}</span>`;
+    `<span class="meta">${occ ? stdMassFor('stretcher') + ' ' + massU() : 'len ' + len + ' ' + armU() + ' · arm ' + s.arm}</span>`;
   d.onclick = () => {
     if (state.pax[s.id] === 'stretcher') delete state.pax[s.id]; else state.pax[s.id] = 'stretcher';
     renderCabin(); renderNav(); recompute(); save();
@@ -187,7 +289,7 @@ function seatEl(s) {
   const face = s.rot ? ' face-' + String(s.rot).toLowerCase() : '';
   const d = div('seat ' + (type || 'empty') + face);
   const tag = { male: 'M', female: 'F', child: 'C' }[type] || '';
-  d.innerHTML = `<span class="ic">${type ? tag : (s.label ?? s.id)}</span><span class="kg">${type ? stdMassFor(type) + 'lb' : 'arm ' + s.arm}</span>`;
+  d.innerHTML = `<span class="ic">${type ? tag : (s.label ?? s.id)}</span><span class="kg">${type ? stdMassFor(type) + massU() : 'arm ' + s.arm}</span>`;
   d.onclick = () => {
     if (state.pax[s.id] === brush) delete state.pax[s.id];
     else state.pax[s.id] = brush;
@@ -198,17 +300,18 @@ function seatEl(s) {
 
 function renderCargo() {
   const host = el('cargoList'); host.innerHTML = '';
-  for (const h of aircraft.stations.cargo || []) {
-    host.appendChild(field(h.label, `arm ${h.arm} in · max ${h.maxMass} lb`,
-      stepper(state.cargo[h.id] || 0, 50, (v) => { state.cargo[h.id] = v; recompute(); save(); }), 'lb'));
+  for (const h of aircraft.stations?.cargo || []) {
+    host.appendChild(field(h.label, `arm ${h.arm} ${armU()} · max ${h.maxMass} ${massU()}`,
+      stepper(state.cargo[h.id] || 0, massU() === 'kg' ? 25 : 50, (v) => { state.cargo[h.id] = v; recompute(); save(); }, h.maxMass), massU()));
   }
 }
 
 const FUEL_FIELDS = [['ramp', 'Ramp (block)'], ['taxi', 'Taxi'], ['trip', 'Trip']];
 function renderFuel() {
   const host = el('fuelInputs'); host.innerHTML = '';
+  const step = massU() === 'kg' ? 25 : 50;
   for (const [k, label] of FUEL_FIELDS) {
-    host.appendChild(field(label, '', stepper(state.fuel[k], 50, (v) => { state.fuel[k] = v; recompute(); save(); }), 'lb'));
+    host.appendChild(field(label, '', stepper(state.fuel[k], step, (v) => { state.fuel[k] = v; recompute(); save(); }), massU()));
   }
 }
 
@@ -237,16 +340,16 @@ function renderSummary(r) {
 }
 function renderFuelDerived(r) {
   const f = r.fuel;
-  const cell = (v, k, accent) => `<div class="readout ${accent ? 'accent' : ''}"><div class="v">${fmt(v)} <small>lb</small></div><div class="k">${k}</div></div>`;
+  const cell = (v, k, accent) => `<div class="readout ${accent ? 'accent' : ''}"><div class="v">${fmt(v)} <small>${massU()}</small></div><div class="k">${k}</div></div>`;
   el('fuelDerived').innerHTML = cell(f.takeoff, 'Takeoff', 1) + cell(f.landing, 'Landing', 1) + cell(f.trip, 'Trip') + cell(f.ramp, 'Ramp');
   let msg = f.sufficient
-    ? pill('good', `Landing ≥ minimum reserve (${fmt(f.minReserve)} lb)`)
-    : pill('bad', `Landing below minimum reserve (${fmt(f.minReserve)} lb)`);
+    ? pill('good', `Landing ≥ minimum reserve (${fmt(f.minReserve)} ${massU()})`)
+    : pill('bad', `Landing below minimum reserve (${fmt(f.minReserve)} ${massU()})`);
   const fl = r.fuelLimits;
   if (fl && fl.takeoff.checked) {
     const ok = fl.takeoff.inside && fl.landing.inside;
     const t = fl.takeoff.tanks[0];
-    const detail = t ? ` (CG ${t.arm.toFixed(1)} in vs ${t.fwd.toFixed(1)}…${t.aft.toFixed(1)})` : '';
+    const detail = t ? ` (CG ${t.arm.toFixed(1)} ${armU()} vs ${t.fwd.toFixed(1)}…${t.aft.toFixed(1)})` : '';
     msg += ' ' + (ok ? pill('good', 'Fuel CG within tank limits') : pill('bad', 'Fuel CG outside tank limits' + detail));
   }
   el('fuelMsg').innerHTML = msg;
@@ -272,9 +375,41 @@ function renderAircraft() {
 }
 
 // ---- dispatch: cabin seats --------------------------------------------------
+function renderRowEditor(host) {
+  const rows = aircraft.cabinRows || [];
+  const body = rows.map((r, i) =>
+    `<tr>
+      <td><input data-i="${i}" data-k="label" value="${r.label}" style="width:46px"></td>
+      <td><input data-i="${i}" data-k="section" value="${r.section ?? ''}" style="width:44px"></td>
+      <td><input type="number" step="0.001" data-i="${i}" data-k="arm" value="${r.arm}" style="width:84px"></td>
+      <td><input type="number" data-i="${i}" data-k="capacity" value="${r.capacity ?? 4}" style="width:50px"></td>
+      <td><button class="btn small ghost" data-del="${i}" style="color:var(--red)">✕</button></td>
+    </tr>`).join('');
+  host.innerHTML = `<table class="vtable"><thead><tr><th>Row</th><th>Sect</th><th>Arm (${armU()})</th><th>Cap</th><th></th></tr></thead><tbody>${body}</tbody></table>
+    <button class="btn small" id="addRowBtn" style="margin-top:8px">+ Add row</button>
+    <p class="hint">Section seating: pilots enter a passenger count per row (× standard mass ${stdMassFor('adult')} ${massU()}). Rows render grouped by section, fore-to-aft by arm.</p>`;
+  host.querySelectorAll('input[data-i]').forEach((inp) => inp.oninput = () => {
+    const r = aircraft.cabinRows[+inp.dataset.i]; const k = inp.dataset.k;
+    r[k] = (k === 'label' || k === 'section') ? inp.value : Number(inp.value);
+    save(); recompute();
+  });
+  host.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => {
+    const r = aircraft.cabinRows[+b.dataset.del];
+    if (state.rows) delete state.rows[r.id];
+    aircraft.cabinRows.splice(+b.dataset.del, 1);
+    renderSeats(); renderCabin(); recompute(); save();
+  });
+  el('addRowBtn').onclick = () => {
+    const ids = aircraft.cabinRows.map((r) => r.id);
+    let n = aircraft.cabinRows.length + 1, id = 'r' + n; while (ids.includes(id)) { n++; id = 'r' + n; }
+    aircraft.cabinRows.push({ id, label: String(n), section: '', arm: 0, capacity: 4 });
+    renderSeats(); renderCabin(); recompute(); save();
+  };
+}
 function renderSeats() {
   const host = el('seatEditors');
-  const seats = aircraft.stations.pax || [];
+  if (aircraft.cabinRows) return renderRowEditor(host);
+  const seats = aircraft.stations?.pax || [];
   const rows = seats.map((s, i) => {
     const isStr = s.type === 'stretcher';
     const typeCell = `<button class="btn small" data-type="${i}" style="min-width:52px">${isStr ? 'STR' : 'SEAT'}</button>` +
@@ -341,7 +476,7 @@ function ptTableHTML(title, arr, t) {
       <td><input type="number" step="0.01" data-t="${t}" data-i="${i}" data-f="1" value="${pt[1]}" style="width:84px"></td>
       <td><button class="btn small ghost" data-delrow="${t}" data-i="${i}">✕</button></td></tr>`).join('');
   return `<div style="font-size:12px;color:var(--muted);margin:12px 0 4px;font-weight:700;text-transform:uppercase;letter-spacing:.05em">${title}</div>
-    <table class="vtable"><thead><tr><th>Qty (lb)</th><th>Arm (in)</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="vtable"><thead><tr><th>Qty (${massU()})</th><th>Arm (${armU()})</th><th></th></tr></thead><tbody>${rows}</tbody></table>
     <button class="btn small" data-addrow="${t}">+ Add point</button>`;
 }
 function renderTanks() {
@@ -402,7 +537,7 @@ function renderEnvEditors() {
     const rows = curve.map((pt, i) =>
       `<tr><td><input type="number" data-i="${i}" data-f="0" value="${pt[0]}"></td><td><input type="number" step="0.1" data-i="${i}" data-f="1" value="${pt[1]}"></td><td><button class="btn small ghost" data-del="${i}">✕</button></td></tr>`).join('');
     det.innerHTML = `<summary>${label} <span style="color:var(--muted)">(${curve.length})</span></summary>
-      <table class="vtable"><thead><tr><th>Mass (lb)</th><th>%MAC</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <table class="vtable"><thead><tr><th>Mass (${massU()})</th><th>%MAC</th><th></th></tr></thead><tbody>${rows}</tbody></table>
       <button class="btn small" data-add="1">+ Add vertex</button>`;
     det.querySelectorAll('input').forEach((inp) => inp.oninput = () => { curve[+inp.dataset.i][+inp.dataset.f] = Number(inp.value); save(); recompute(); });
     det.querySelector('[data-add]').onclick = () => { const last = curve[curve.length - 1] || [26000, 25]; curve.push([last[0] + 1000, last[1]]); renderEnvEditors(); recompute(); save(); };
@@ -415,7 +550,28 @@ el('xmlImport').onclick = () => {
   try { parseLegacyXml(el('xmlIn').value); save(); renderDispatch(); recompute(); el('xmlIn').value = ''; alert('Imported. Review the values.'); }
   catch (e) { alert('Could not parse: ' + e.message); }
 };
-el('resetDefault').onclick = () => { if (confirm('Reset aircraft to the bundled sample?')) { aircraft = structuredClone(DEFAULT_AIRCRAFT); state = freshLoad(); save(); renderAll(); } };
+el('resetDefault').onclick = () => {
+  const tmpl = CATALOG.find((a) => a.id === aircraft.id);
+  if (!tmpl) { alert('No catalog template for this aircraft.'); return; }
+  if (!confirm('Reset this aircraft and its load to the bundled template?')) return;
+  const idx = fleet.findIndex((a) => a.id === aircraft.id);
+  fleet[idx] = structuredClone(tmpl); aircraft = fleet[idx];
+  state = loads[aircraft.id] = freshLoad(aircraft);
+  save(); renderAll();
+};
+el('dupAircraft').onclick = () => {
+  const copy = structuredClone(aircraft);
+  let id = aircraft.id + '-copy', n = 2; while (fleet.some((a) => a.id === id)) id = aircraft.id + '-copy' + n++;
+  copy.id = id; copy.name = aircraft.name + ' (copy)';
+  fleet.push(copy); save(); switchAircraft(id);
+};
+el('delAircraft').onclick = () => {
+  if (fleet.length <= 1) { alert('At least one aircraft is required.'); return; }
+  if (!confirm('Delete ' + aircraft.name + ' from the fleet?')) return;
+  fleet = fleet.filter((a) => a.id !== aircraft.id); delete loads[aircraft.id];
+  selected = fleet[0].id; aircraft = fleet[0]; state = loads[aircraft.id] || (loads[aircraft.id] = freshLoad(aircraft));
+  save(); renderAll();
+};
 function parseLegacyXml(xml) {
   const attr = (tag, name) => { const m = xml.match(new RegExp(`<${tag}[^>]*\\b${name}="([\\d.\\-]+)"`, 'i')); return m ? Number(m[1]) : null; };
   const pairs = (tag) => { const m = xml.match(new RegExp(`<${tag}>(.*?)</${tag}>`, 'is')); return m ? [...m[1].matchAll(/\(([\d.\-]+)\s*,\s*([\d.\-]+)\)/g)].map((g) => [Number(g[1]), Number(g[2])]) : null; };
@@ -435,11 +591,11 @@ function field(title, hint, control, unit) {
   if (unit) { const u = spanCls('unit', unit); f.appendChild(u); }
   return f;
 }
-function stepper(value, step, onChange) {
+function stepper(value, step, onChange, max) {
   const wrap = div('stepper');
   const minus = btn('−'), plus = btn('+');
   const inp = document.createElement('input'); inp.type = 'number'; inp.value = value;
-  const fire = (v) => { v = Math.max(0, Math.round(v)); inp.value = v; onChange(v); };
+  const fire = (v) => { v = Math.max(0, Math.round(v)); if (max != null) v = Math.min(v, max); inp.value = v; onChange(v); };
   minus.onclick = () => fire((+inp.value || 0) - step);
   plus.onclick = () => fire((+inp.value || 0) + step);
   inp.oninput = () => onChange(+inp.value || 0);
