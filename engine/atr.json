@@ -26,7 +26,7 @@
       { "id": "aftca", "label": "Aft CA", "arm": 22.172, "mass": 75 }
     ],
     "pantry": [
-      { "id": "galley", "label": "Aft galley", "mass": 50, "arm": 22.0, "_placeholder": true }
+      { "id": "galley", "label": "Aft galley", "mass": 50, "maxMass": 200, "arm": 22.0, "_placeholder": true }
     ],
     "cargo": [
       { "id": "fwdHold", "label": "Forward hold", "arm": 6.5, "maxMass": 500, "_placeholder": true },

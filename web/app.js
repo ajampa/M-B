@@ -4,30 +4,108 @@ import DEFAULT_AIRCRAFT from './default-aircraft.js';
 import ATR_AIRCRAFT from './atr-aircraft.js';
 
 const CATALOG = [DEFAULT_AIRCRAFT, ATR_AIRCRAFT]; // built-in aircraft the fleet seeds from
-const LS_FLEET = 'mb.fleet.v6';
-const LS_LOADS = 'mb.loads.v6';
-const LS_SEL = 'mb.selected.v6';
+const LS_FLEET = 'mb.fleet.v7';
+const LS_DRAFTS = 'mb.drafts.v7';
+const LS_HIST = 'mb.hist.v7';
+const LS_LOADS = 'mb.loads.v7';
+const LS_SEL = 'mb.selected.v7';
+const clone = (o) => JSON.parse(JSON.stringify(o));
 
-let fleet = load(LS_FLEET) || CATALOG.map((a) => structuredClone(a));
+// fleet  = committed aircraft configs (the "final save")
+// drafts = per-aircraft working copies Dispatch edits (tested live, not yet saved)
+// histories = per-aircraft log of staged change-batches (revertable)
+let fleet = load(LS_FLEET) || CATALOG.map(clone);
+let drafts = load(LS_DRAFTS) || {};
+let histories = load(LS_HIST) || {};
 let loads = load(LS_LOADS) || {};
 let selected = load(LS_SEL) || fleet[0].id;
-let aircraft = fleet.find((a) => a.id === selected) || fleet[0];
-let state = loads[aircraft.id] || (loads[aircraft.id] = freshLoad(aircraft));
+ensureDraft(selected);
+let aircraft = drafts[selected];           // everything renders/calculates from the DRAFT
+let lastSnapshot = clone(aircraft);        // state at the last history checkpoint
+let state = loads[selected] || (loads[selected] = freshLoad(aircraft));
 let brush = 'male';
+let histTimer = null;
 
 function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
-function save() {
-  loads[aircraft.id] = state;
+function committed() { return fleet.find((a) => a.id === selected); }
+function ensureDraft(id) {
+  const c = fleet.find((a) => a.id === id);
+  if (!drafts[id]) drafts[id] = clone(c);
+  if (!histories[id]) histories[id] = [];
+}
+function persist() {
+  loads[selected] = state;
   localStorage.setItem(LS_FLEET, JSON.stringify(fleet));
+  localStorage.setItem(LS_DRAFTS, JSON.stringify(drafts));
+  localStorage.setItem(LS_HIST, JSON.stringify(histories));
   localStorage.setItem(LS_LOADS, JSON.stringify(loads));
   localStorage.setItem(LS_SEL, JSON.stringify(selected));
 }
+// Every save persists immediately and schedules a history capture. Dispatch
+// edits change the draft (logged); pilot/load edits don't (ignored by the diff).
+function save() { persist(); scheduleHistory(); renderHistory(); }
 function switchAircraft(id) {
-  loads[aircraft.id] = state;
-  selected = id;
-  aircraft = fleet.find((a) => a.id === id);
+  flushHistory();
+  loads[selected] = state;
+  selected = id; ensureDraft(id);
+  aircraft = drafts[id]; lastSnapshot = clone(aircraft);
   state = loads[id] || (loads[id] = freshLoad(aircraft));
   save(); renderAll();
+}
+
+// ---- dispatch staging / history --------------------------------------------
+function isDirty() { return JSON.stringify(aircraft) !== JSON.stringify(committed()); }
+// Called by every Dispatch (config) edit. Persists the draft and the live
+// preview immediately, but only logs a revertable history batch after a pause.
+function dispatchChanged() { recompute(); save(); }
+function scheduleHistory() { clearTimeout(histTimer); histTimer = setTimeout(flushHistory, 650); }
+function flushHistory() {
+  if (histTimer) { clearTimeout(histTimer); histTimer = null; }
+  const changes = diffAircraft(lastSnapshot, aircraft);
+  if (changes.length) {
+    histories[selected].push({ ts: Date.now(), changes, before: lastSnapshot, after: clone(aircraft) });
+    const h = histories[selected];
+    if (h.length > 40) h.splice(0, h.length - 40);
+    lastSnapshot = clone(aircraft);
+    persist();
+  }
+  renderHistory();
+}
+function revertTo(i) {
+  flushHistory();
+  const h = histories[selected];
+  const before = clone(h[i].before);
+  drafts[selected] = before; aircraft = before; lastSnapshot = clone(before);
+  histories[selected] = h.slice(0, i);
+  save(); renderAll();
+}
+function commitDraft() {
+  flushHistory();
+  const idx = fleet.findIndex((a) => a.id === selected);
+  fleet[idx] = clone(aircraft); histories[selected] = []; lastSnapshot = clone(aircraft);
+  save(); renderHistory();
+}
+function discardDraft() {
+  const c = clone(committed());
+  drafts[selected] = c; aircraft = c; lastSnapshot = clone(c); histories[selected] = [];
+  save(); renderAll();
+}
+// Recursive diff of two aircraft snapshots -> list of {path, from, to, kind}.
+function diffAircraft(a, b, path = '', out = []) {
+  const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
+  for (const k of keys) {
+    if (k.startsWith('_')) continue;
+    const pa = a ? a[k] : undefined, pb = b ? b[k] : undefined;
+    const p = path ? path + '.' + k : k;
+    if (pa === pb) continue;
+    const oa = pa && typeof pa === 'object', ob = pb && typeof pb === 'object';
+    if (pa === undefined) out.push({ path: p, kind: 'add' });
+    else if (pb === undefined) out.push({ path: p, kind: 'remove' });
+    else if (Array.isArray(pa) || Array.isArray(pb)) { if (JSON.stringify(pa) !== JSON.stringify(pb)) out.push({ path: p, kind: 'arr' }); }
+    else if (oa || ob) diffAircraft(pa, pb, p, out);
+    else if (pa !== pb) out.push({ path: p, kind: 'val', from: pa, to: pb });
+  }
+  return out;
 }
 
 // Unit labels come from the selected aircraft.
@@ -61,7 +139,8 @@ function buildLoad() {
   const crew = (aircraft.stations?.crew || [])
     .map((c) => ({ mass: Number(state.crew[c.id]) || 0, arm: c.arm })).filter((x) => x.mass > 0);
   const pantry = (aircraft.stations?.pantry || [])
-    .filter((p) => state.pantry[p.id]).map((p) => ({ mass: p.mass, arm: p.arm }));
+    .map((p) => { let v = state.pantry?.[p.id]; if (v === true) v = p.mass; if (v == null) v = p.mass; return { mass: Number(v) || 0, arm: p.arm }; })
+    .filter((x) => x.mass > 0);
   // Normal seating: each occupied seat holds a category (string) or a custom mass (number).
   const pax = Object.entries(state.pax || {}).filter(([, t]) => t)
     .map(([id, t]) => ({ mass: typeof t === 'number' ? t : stdMass[t], arm: seatArm(id) }));
@@ -220,7 +299,7 @@ function renderAll() {
   bindText('fl_route', () => state.flight.route, (v) => state.flight.route = v);
   bindText('fl_alt', () => state.flight.alt, (v) => state.flight.alt = v);
   renderCrew(); renderPantry(); renderPaxBrush(); renderCabin(); renderCargo(); renderFuel();
-  renderNav(); showPanel(); recompute();
+  renderNav(); showPanel(); recompute(); renderHistory();
 }
 
 function bindNum(id, key) { const e = el(id); e.value = state[key]; e.oninput = () => { state[key] = e.value; recompute(); save(); }; }
@@ -236,9 +315,12 @@ function renderCrew() {
 
 function renderPantry() {
   const host = el('pantryList'); host.innerHTML = '';
+  state.pantry = state.pantry || {};
   for (const p of aircraft.stations?.pantry || []) {
-    const sw = toggle(!!state.pantry[p.id], (on) => { state.pantry[p.id] = on; recompute(); save(); });
-    host.appendChild(field(p.label, `${p.mass} ${massU()} · arm ${p.arm} ${armU()}`, sw));
+    let v = state.pantry[p.id]; if (v === true) v = p.mass; if (v == null) v = p.mass; v = Number(v) || 0;
+    const max = p.maxMass ?? p.mass;
+    host.appendChild(field(p.label, `default ${p.mass} · max ${max} ${massU()} · arm ${p.arm} ${armU()}`,
+      stepper(v, massU() === 'kg' ? 5 : 25, (nv) => { state.pantry[p.id] = nv; recompute(); save(); }, max), massU()));
   }
 }
 
@@ -492,6 +574,44 @@ function renderAircraft() {
   aircraft.standardMasses = aircraft.standardMasses || {};
   const smMap = { sm_adult: 'adult', sm_male: 'adultMale', sm_female: 'adultFemale', sm_child: 'child', sm_infant: 'infant', sm_stretcher: 'stretcher' };
   for (const [id, key] of Object.entries(smMap)) { el(id).value = aircraft.standardMasses[key] ?? ''; bindCfg(id, () => aircraft.standardMasses, key); }
+  renderCrewEditor(); renderPantryEditor();
+}
+function renderCrewEditor() {
+  const host = el('crewEditor'); const crew = aircraft.stations?.crew || [];
+  const body = crew.map((c, i) => `<tr>
+    <td><input data-i="${i}" data-k="label" value="${c.label ?? ''}" style="width:116px"></td>
+    <td><input type="number" data-i="${i}" data-k="mass" value="${c.mass ?? 0}" style="width:62px"></td>
+    <td><input type="number" step="0.001" data-i="${i}" data-k="arm" value="${c.arm}" style="width:78px"></td>
+    <td><button class="btn small ghost" data-del="${i}" style="color:var(--red)">✕</button></td></tr>`).join('');
+  host.innerHTML = `<table class="vtable"><thead><tr><th>Name</th><th>Mass (${massU()})</th><th>Arm (${armU()})</th><th></th></tr></thead><tbody>${body}</tbody></table>
+    <button class="btn small" id="addCrew" style="margin-top:8px">+ Add crew</button>`;
+  host.querySelectorAll('input[data-i]').forEach((inp) => inp.oninput = () => { const c = aircraft.stations.crew[+inp.dataset.i]; const k = inp.dataset.k; c[k] = k === 'label' ? inp.value : Number(inp.value); dispatchChanged(); });
+  host.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => { aircraft.stations.crew.splice(+b.dataset.del, 1); renderCrewEditor(); dispatchChanged(); });
+  el('addCrew').onclick = () => {
+    aircraft.stations.crew = aircraft.stations.crew || [];
+    let n = aircraft.stations.crew.length + 1, id = 'c' + n; while (aircraft.stations.crew.some((c) => c.id === id)) id = 'c' + (++n);
+    aircraft.stations.crew.push({ id, label: 'Crew ' + n, mass: massU() === 'kg' ? 85 : 200, arm: 0 });
+    renderCrewEditor(); dispatchChanged();
+  };
+}
+function renderPantryEditor() {
+  const host = el('pantryEditor'); const pantry = aircraft.stations?.pantry || [];
+  const body = pantry.map((p, i) => `<tr>
+    <td><input data-i="${i}" data-k="label" value="${p.label ?? ''}" style="width:104px"></td>
+    <td><input type="number" data-i="${i}" data-k="mass" value="${p.mass ?? 0}" style="width:56px"></td>
+    <td><input type="number" data-i="${i}" data-k="maxMass" value="${p.maxMass ?? p.mass ?? 0}" style="width:56px"></td>
+    <td><input type="number" step="0.001" data-i="${i}" data-k="arm" value="${p.arm}" style="width:70px"></td>
+    <td><button class="btn small ghost" data-del="${i}" style="color:var(--red)">✕</button></td></tr>`).join('');
+  host.innerHTML = `<table class="vtable"><thead><tr><th>Name</th><th>Default</th><th>Max</th><th>Arm (${armU()})</th><th></th></tr></thead><tbody>${body}</tbody></table>
+    <button class="btn small" id="addPantry" style="margin-top:8px">+ Add pantry item</button>`;
+  host.querySelectorAll('input[data-i]').forEach((inp) => inp.oninput = () => { const p = aircraft.stations.pantry[+inp.dataset.i]; const k = inp.dataset.k; p[k] = k === 'label' ? inp.value : Number(inp.value); dispatchChanged(); });
+  host.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => { aircraft.stations.pantry.splice(+b.dataset.del, 1); renderPantryEditor(); dispatchChanged(); });
+  el('addPantry').onclick = () => {
+    aircraft.stations.pantry = aircraft.stations.pantry || [];
+    let n = aircraft.stations.pantry.length + 1, id = 'p' + n; while (aircraft.stations.pantry.some((p) => p.id === id)) id = 'p' + (++n);
+    aircraft.stations.pantry.push({ id, label: 'Pantry ' + n, mass: 0, maxMass: 0, arm: 0 });
+    renderPantryEditor(); dispatchChanged();
+  };
 }
 
 // ---- dispatch: cabin seats --------------------------------------------------
@@ -654,7 +774,43 @@ function renderEnvelope() {
   bindCfg('cfg_lemac', () => aircraft.mac, 'lemac'); bindCfg('cfg_maclen', () => aircraft.mac, 'maclen');
   renderEnvEditors();
 }
-function bindCfg(id, target, key) { el(id).oninput = (e) => { target()[key] = Number(e.target.value); save(); recompute(); }; }
+function bindCfg(id, target, key) { el(id).oninput = (e) => { target()[key] = Number(e.target.value); dispatchChanged(); }; }
+
+// ---- pending changes / history (sidebar) -----------------------------------
+function renderHistory() {
+  const card = el('pendingCard'); const h = histories[selected] || []; const dirty = isDirty();
+  card.classList.toggle('hidden', !dirty);
+  const edits = h.reduce((a, e) => a + e.changes.length, 0);
+  el('pendingCount').innerHTML = dirty ? pill('warn', edits + ' edit' + (edits === 1 ? '' : 's')) : '';
+  const list = el('historyList'); list.innerHTML = '';
+  for (let i = h.length - 1; i >= 0; i--) {
+    const entry = h[i];
+    const row = div('hist-entry');
+    const items = entry.changes.slice(0, 5).map(describeChange).join('');
+    const more = entry.changes.length > 5 ? `<div class="he-c more">+${entry.changes.length - 5} more</div>` : '';
+    const rev = `<button class="btn small ghost he-rev" data-i="${i}">Revert</button>`;
+    row.innerHTML = `<div class="he-head"><span class="he-time">${new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>${rev}</div><div class="he-desc">${items}${more}</div>`;
+    row.querySelector('[data-i]').onclick = () => { if (confirm('Revert this and all later changes?')) revertTo(i); };
+    list.appendChild(row);
+  }
+}
+function describeChange(c) {
+  const p = prettyPath(c.path);
+  if (c.kind === 'add') return `<div class="he-c">＋ ${p}</div>`;
+  if (c.kind === 'remove') return `<div class="he-c">－ ${p}</div>`;
+  if (c.kind === 'arr') return `<div class="he-c">~ ${p} updated</div>`;
+  return `<div class="he-c">${p}: <b>${fmtChange(c.from)}</b> → <b>${fmtChange(c.to)}</b></div>`;
+}
+function prettyPath(path) {
+  return path
+    .replace(/^limits\./, 'Limit ').replace(/^index\./, 'Index ').replace(/^mac\./, 'MAC ')
+    .replace(/^standardMasses\./, 'Std mass ').replace(/^stations\.crew/, 'Crew').replace(/^stations\.pantry/, 'Pantry')
+    .replace(/^stations\.cargo/, 'Cargo').replace(/^envelopes\./, 'Env ').replace(/^tanks/, 'Tank').replace(/^cabinRows/, 'Row')
+    .replace(/\.(\d+)\b/g, '[$1]').replace(/^name$/, 'Name').replace(/^sectionArmMode$/, 'Section arm mode');
+}
+function fmtChange(v) { return typeof v === 'number' ? (+v.toFixed(3)) : (v == null ? '—' : String(v)); }
+el('saveDraft').onclick = () => commitDraft();
+el('discardDraft').onclick = () => { if (confirm('Discard all pending changes and revert to the saved aircraft?')) discardDraft(); };
 
 const ENV_CURVES = [['TOL', 'fwd', 'Takeoff/Landing — Forward'], ['TOL', 'aft', 'Takeoff/Landing — Aft'], ['FLT', 'fwd', 'In-flight — Forward'], ['FLT', 'aft', 'In-flight — Aft']];
 function renderEnvEditors() {
@@ -681,23 +837,26 @@ el('xmlImport').onclick = () => {
 el('resetDefault').onclick = () => {
   const tmpl = CATALOG.find((a) => a.id === aircraft.id);
   if (!tmpl) { alert('No catalog template for this aircraft.'); return; }
-  if (!confirm('Reset this aircraft and its load to the bundled template?')) return;
-  const idx = fleet.findIndex((a) => a.id === aircraft.id);
-  fleet[idx] = structuredClone(tmpl); aircraft = fleet[idx];
-  state = loads[aircraft.id] = freshLoad(aircraft);
+  if (!confirm('Reset this aircraft (config + load) to the bundled template? Discards customisations and pending changes.')) return;
+  const idx = fleet.findIndex((a) => a.id === selected);
+  fleet[idx] = clone(tmpl); drafts[selected] = clone(tmpl); aircraft = drafts[selected]; lastSnapshot = clone(aircraft); histories[selected] = [];
+  state = loads[selected] = freshLoad(aircraft);
   save(); renderAll();
 };
 el('dupAircraft').onclick = () => {
-  const copy = structuredClone(aircraft);
+  flushHistory();
+  const copy = clone(aircraft);
   let id = aircraft.id + '-copy', n = 2; while (fleet.some((a) => a.id === id)) id = aircraft.id + '-copy' + n++;
   copy.id = id; copy.name = aircraft.name + ' (copy)';
-  fleet.push(copy); save(); switchAircraft(id);
+  fleet.push(copy); drafts[id] = clone(copy); histories[id] = [];
+  save(); switchAircraft(id);
 };
 el('delAircraft').onclick = () => {
   if (fleet.length <= 1) { alert('At least one aircraft is required.'); return; }
   if (!confirm('Delete ' + aircraft.name + ' from the fleet?')) return;
-  fleet = fleet.filter((a) => a.id !== aircraft.id); delete loads[aircraft.id];
-  selected = fleet[0].id; aircraft = fleet[0]; state = loads[aircraft.id] || (loads[aircraft.id] = freshLoad(aircraft));
+  fleet = fleet.filter((a) => a.id !== selected); delete drafts[selected]; delete histories[selected]; delete loads[selected];
+  selected = fleet[0].id; ensureDraft(selected); aircraft = drafts[selected]; lastSnapshot = clone(aircraft);
+  state = loads[selected] || (loads[selected] = freshLoad(aircraft));
   save(); renderAll();
 };
 function parseLegacyXml(xml) {

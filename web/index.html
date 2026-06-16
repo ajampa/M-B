@@ -114,6 +114,14 @@
           <p class="hint">Used by both seat-map and section seating.</p>
         </div>
         <div class="card">
+          <div class="card-head"><h2>Crew Stations</h2><div class="sub">name · default mass · arm</div></div>
+          <div id="crewEditor"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Pantry Items</h2><div class="sub">name · default · max · arm</div></div>
+          <div id="pantryEditor"></div>
+        </div>
+        <div class="card">
           <div class="card-head"><h2>Fleet</h2><div class="sub">this aircraft</div></div>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <button class="btn" id="dupAircraft">Duplicate</button>
@@ -175,6 +183,15 @@
     </main>
 
     <aside class="side">
+      <div class="card pending hidden" id="pendingCard">
+        <div class="card-head"><h2>Pending changes</h2><div class="right" id="pendingCount"></div></div>
+        <div class="pending-actions">
+          <button class="btn primary" id="saveDraft">Save to aircraft</button>
+          <button class="btn ghost" id="discardDraft">Discard all</button>
+        </div>
+        <div id="historyList"></div>
+        <p class="hint">Dispatch edits are staged here — test them in the loadsheet below, then save or revert.</p>
+      </div>
       <div class="card loadsheet" id="loadsheetCard">
         <div class="card-head"><h2>Loadsheet</h2><div class="right" id="loadsheetTime"></div></div>
         <table>

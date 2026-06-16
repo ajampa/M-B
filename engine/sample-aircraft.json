@@ -35,7 +35,7 @@
       { "id": "fo", "label": "First Officer", "arm": -310.0, "mass": 200, "_placeholder": true }
     ],
     "pantry": [
-      { "id": "pantryA", "label": "Forward galley", "mass": 300, "arm": -280.0, "_placeholder": true }
+      { "id": "pantryA", "label": "Forward galley", "mass": 300, "maxMass": 600, "arm": -280.0, "_placeholder": true }
     ],
     "pax": [
       { "id": "s1", "label": "1", "arm": -252.0, "row": 1, "rail": 1, "sect": "A", "rot": "DOWN" },
