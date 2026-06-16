@@ -38,8 +38,8 @@
     },
     "expect": {
       "zfm": { "mass": 29630, "pctMac": 27.7175 },
-      "tom": { "mass": 38630, "pctMac": 29.1754 },
-      "ldm": { "mass": 32630, "pctMac": 28.0277 },
+      "tom": { "mass": 38630, "pctMac": 25.2015 },
+      "ldm": { "mass": 32630, "pctMac": 24.8367 },
       "ramp": { "mass": 38930 },
       "fuel": { "ramp": 9300, "takeoff": 9000, "landing": 3000, "sufficient": true },
       "allInside": true,

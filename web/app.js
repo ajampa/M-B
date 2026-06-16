@@ -2,8 +2,8 @@ import { computeLoadsheet } from '../engine/massbalance.mjs';
 import { renderEnvelopeSVG } from './chart.js';
 import DEFAULT_AIRCRAFT from './default-aircraft.js';
 
-const LS_AC = 'mb.aircraft.v2';
-const LS_LOAD = 'mb.load.v2';
+const LS_AC = 'mb.aircraft.v3';
+const LS_LOAD = 'mb.load.v3';
 
 let aircraft = load(LS_AC) || structuredClone(DEFAULT_AIRCRAFT);
 let state = load(LS_LOAD) || freshLoad();
@@ -25,7 +25,7 @@ function freshLoad() {
     pantry: { pantryA: true },
     pax: { '3L': 'male', '3R': 'female', '4L': 'male', '4R': 'female' },
     cargo: { aftHold: 1000 },
-    fuel: { taxi: 300, trip: 6000, contingency: 300, alternate: 1500, finalReserve: 1200, extra: 0 },
+    fuel: { taxi: 300, trip: 7000, contingency: 350, alternate: 1800, finalReserve: 1300, extra: 0 },
   };
 }
 

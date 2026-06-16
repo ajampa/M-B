@@ -66,26 +66,26 @@ button { font-family: inherit; }
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 20px;
-  background: rgba(255,255,255,.72);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border-bottom: 1px solid var(--line);
+  padding: 13px 20px;
+  background: var(--navy);
+  border-bottom: 3px solid #0c1a29;
   position: sticky; top: 0; z-index: 30;
 }
 .appbar .mark {
-  width: 40px; height: 40px; border-radius: 8px;
-  background: var(--navy);
-  display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px; letter-spacing: .02em;
+  width: 40px; height: 40px; border-radius: 7px;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.22);
+  display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 12.5px; letter-spacing: .03em;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,.25);
 }
-.appbar .title { font-size: 17px; font-weight: 700; line-height: 1.1; }
-.appbar .reg { font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.appbar .title { font-size: 16px; font-weight: 700; line-height: 1.1; color: #fff; letter-spacing: .04em; text-transform: uppercase; }
+.appbar .reg { font-size: 12px; color: rgba(255,255,255,.6); font-variant-numeric: tabular-nums; }
 .appbar .spacer { flex: 1; }
 .appbar .flightpick {
-  display: flex; align-items: center; gap: 8px; background: var(--panel-2);
-  border: 1px solid var(--line); border-radius: 12px; padding: 6px 12px; font-size: 13px; color: var(--ink-2);
+  display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.16); border-radius: 8px; padding: 7px 12px; font-size: 12.5px; color: rgba(255,255,255,.7);
 }
-.appbar .flightpick b { color: var(--ink); }
+.appbar .flightpick b { color: #fff; font-variant-numeric: tabular-nums; }
 
 /* Body grid */
 .app-body {
@@ -130,9 +130,10 @@ button { font-family: inherit; }
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   padding: 18px 20px; box-shadow: var(--shadow); margin-bottom: 16px;
 }
-.card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.card-head h2 { font-size: 17px; font-weight: 700; margin: 0; }
-.card-head .sub { font-size: 13px; color: var(--muted); }
+.card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding-bottom: 11px; border-bottom: 1px solid var(--line); }
+.card-head h2 { font-size: 15px; font-weight: 700; margin: 0; letter-spacing: .02em; display: flex; align-items: center; gap: 9px; }
+.card-head h2::before { content: ""; width: 3px; height: 15px; background: var(--navy); border-radius: 2px; }
+.card-head .sub { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
 .card-head .right { margin-left: auto; }
 
 .panel { display: none; }
@@ -193,9 +194,12 @@ input.wide { width: 100%; text-align: left; }
 .seat.empty .ic { font-size: 12px; font-weight: 600; color: var(--muted); }
 .seat .kg { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .seat .sid { position: absolute; }
-.seat.male { background: #e8f1ff; border-color: #9cc6ff; }
-.seat.female { background: #ffeaf3; border-color: #ffa6cd; }
-.seat.child { background: #e7f9ec; border-color: #92e3ab; }
+.seat.male { background: #e6edf5; border-color: #aebfd4; }
+.seat.male .ic { color: #2c4a6b; }
+.seat.female { background: #f1eaf0; border-color: #c8accb; }
+.seat.female .ic { color: #6b3a63; }
+.seat.child { background: #e7f0ea; border-color: #a6c8b4; }
+.seat.child .ic { color: #2f6147; }
 .seat.empty .kg { color: var(--line-strong); }
 
 /* Loadsheet (right panel) */
@@ -216,11 +220,12 @@ input.wide { width: 100%; text-align: left; }
 
 /* Big number readouts */
 .readouts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-.readout { background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
-.readout .v { font-size: 22px; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+/* tactile data tile — same physical vibe as the cabin seats */
+.readout { background: #fff; border: 1px solid var(--line-strong); border-radius: 10px 10px 7px 7px; padding: 12px 14px; box-shadow: inset 0 -3px 0 rgba(16,24,40,.05); }
+.readout .v { font-size: 22px; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--navy); }
 .readout .v small { font-size: 12px; color: var(--muted); font-weight: 600; }
-.readout .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 700; margin-top: 2px; }
-.readout.accent { background: #fff; border-color: var(--navy); border-left-width: 3px; }
+.readout .k { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; font-weight: 700; margin-top: 3px; }
+.readout.accent { border-bottom: 3px solid var(--navy); box-shadow: none; }
 
 /* Chart */
 .chart-card { padding: 14px; }
@@ -813,20 +818,25 @@ const DEFAULT_AIRCRAFT = {
 
   "tanks": [
     {
-      "name": "Wing (L+R)",
-      "_placeholder": true,
-      "maxMass": 9000,
+      "name": "Main",
+      "maxMass": 9720,
       "fillOrder": 1,
-      "burnOrder": 2,
-      "table": [[0, 514.0], [2000, 516.0], [4500, 518.0], [9000, 519.5]]
+      "burnOrder": 3,
+      "table": [[0,473.5],[338,473.5],[675,475.8],[1013,477.6],[1350,479.0],[1688,480.3],[2025,481.5],[2363,482.6],[2700,483.7],[3038,484.8],[3375,486.0],[3713,487.2],[4050,488.3],[4388,489.5],[4725,490.6],[5063,491.7],[5400,492.8],[5738,493.8],[6075,494.9],[6413,495.9],[6750,496.9],[7088,497.8],[7425,498.8],[7763,499.8],[8100,500.8],[8438,501.8],[8775,502.9],[9113,504.1],[9450,505.4],[9720,506.6]]
     },
     {
-      "name": "Center",
-      "_placeholder": true,
-      "maxMass": 3000,
+      "name": "Aux",
+      "maxMass": 7169,
       "fillOrder": 2,
       "burnOrder": 1,
-      "table": [[0, 508.0], [1500, 509.0], [3000, 510.0]]
+      "table": [[0,456.0],[338,456.0],[675,458.0],[1013,460.0],[1350,460.7],[1688,461.1],[2025,461.1],[2363,459.3],[2700,457.9],[3038,457.7],[3375,457.5],[3713,457.2],[4050,456.8],[4388,456.4],[4725,455.9],[5063,455.3],[5400,454.7],[5738,454.0],[6075,453.3],[6224,452.9],[6413,452.5],[6750,451.7],[7088,450.8],[7169,450.6]]
+    },
+    {
+      "name": "Tail",
+      "maxMass": 3112,
+      "fillOrder": 3,
+      "burnOrder": 2,
+      "table": [[0,745.5],[330,745.5],[675,755.3],[1013,761.0],[1350,764.5],[1688,766.7],[2025,768.3],[2363,769.5],[2700,770.7],[3038,771.5],[3112,771.7]]
     }
   ]
 }
@@ -941,8 +951,8 @@ function renderEnvelopeSVG(aircraft, result, opts = {}) {
 
 
 
-const LS_AC = 'mb.aircraft.v2';
-const LS_LOAD = 'mb.load.v2';
+const LS_AC = 'mb.aircraft.v3';
+const LS_LOAD = 'mb.load.v3';
 
 let aircraft = load(LS_AC) || structuredClone(DEFAULT_AIRCRAFT);
 let state = load(LS_LOAD) || freshLoad();
@@ -964,7 +974,7 @@ function freshLoad() {
     pantry: { pantryA: true },
     pax: { '3L': 'male', '3R': 'female', '4L': 'male', '4R': 'female' },
     cargo: { aftHold: 1000 },
-    fuel: { taxi: 300, trip: 6000, contingency: 300, alternate: 1500, finalReserve: 1200, extra: 0 },
+    fuel: { taxi: 300, trip: 7000, contingency: 350, alternate: 1800, finalReserve: 1300, extra: 0 },
   };
 }
 
