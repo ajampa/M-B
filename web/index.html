@@ -36,12 +36,7 @@
           <div class="field"><div class="label"><div class="t">Route</div><div class="h">Departure → Destination</div></div><input type="text" id="fl_route" /></div>
           <div class="field"><div class="label"><div class="t">Alternate</div></div><input type="text" id="fl_alt" /></div>
         </div>
-        <div class="card">
-          <div class="card-head"><h2>Basic Mass &amp; Arm</h2><div class="sub">From weighing report</div></div>
-          <div class="field"><div class="label"><div class="t">Basic Mass</div><div class="h">Empty weighed mass (BM)</div></div><input type="number" id="basicMass" /><span class="unit">lb</span></div>
-          <div class="field"><div class="label"><div class="t">Basic Arm</div><div class="h">Basic CG arm (BARM)</div></div><input type="number" id="basicArm" step="0.01" /><span class="unit">in</span></div>
-          <p class="hint">Dry Operating Mass builds from here + crew + pantry.</p>
-        </div>
+        <p class="hint">Basic Mass, limits and tanks are set in <b>Dispatch</b>.</p>
       </section>
 
       <!-- CREW -->
@@ -91,8 +86,41 @@
         </div>
       </section>
 
-      <!-- CONFIG -->
-      <section class="panel" id="panel-config">
+      <!-- DISPATCH: AIRCRAFT -->
+      <section class="panel" id="panel-aircraft">
+        <div class="card">
+          <div class="card-head"><h2>Aircraft</h2><div class="sub">Dispatch — identity &amp; weighing</div></div>
+          <div class="field"><div class="label"><div class="t">Type / registration</div></div><input type="text" class="wide" id="ac_name" /></div>
+          <div class="field"><div class="label"><div class="t">Basic Mass</div><div class="h">Empty weighed mass (BM)</div></div><input type="number" id="basicMass" /><span class="unit">lb</span></div>
+          <div class="field"><div class="label"><div class="t">Basic Arm</div><div class="h">Basic CG arm (BARM)</div></div><input type="number" id="basicArm" step="0.01" /><span class="unit">in</span></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Maximum Weights</h2><div class="sub">structural limits — lb</div></div>
+          <div class="grid2">
+            <div class="field"><div class="label"><div class="t">MRW</div><div class="h">Max ramp</div></div><input type="number" id="cfg_mrw" /></div>
+            <div class="field"><div class="label"><div class="t">MTOM</div><div class="h">Max takeoff</div></div><input type="number" id="cfg_mtom" /></div>
+            <div class="field"><div class="label"><div class="t">MZFM</div><div class="h">Max zero fuel</div></div><input type="number" id="cfg_mzfm" /></div>
+            <div class="field"><div class="label"><div class="t">MLM</div><div class="h">Max landing</div></div><input type="number" id="cfg_mlm" /></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Reset</h2></div>
+          <button class="btn ghost" id="resetDefault">Reset aircraft to sample</button>
+        </div>
+      </section>
+
+      <!-- DISPATCH: FUEL TANKS -->
+      <section class="panel" id="panel-tanks">
+        <div class="card">
+          <div class="card-head"><h2>Fuel Tanks</h2><div class="sub">Dispatch — arms &amp; burn order</div></div>
+          <p class="hint">Fill order = how fuel loads. Burn order = which tank empties first in flight. The arm table maps fuel quantity → CG arm (non-linear).</p>
+          <div id="tankEditors"></div>
+          <button class="btn small" id="addTank" style="margin-top:8px">+ Add tank</button>
+        </div>
+      </section>
+
+      <!-- DISPATCH: ENVELOPE & INDEX -->
+      <section class="panel" id="panel-envelope">
         <div class="card">
           <div class="card-head"><h2>Index System</h2></div>
           <div class="grid2">
@@ -111,15 +139,6 @@
           <p class="hint">%MAC = (Arm − LEMAC) / MACLEN × 100</p>
         </div>
         <div class="card">
-          <div class="card-head"><h2>Structural Limits</h2><div class="sub">lb</div></div>
-          <div class="grid2">
-            <div class="field"><div class="label"><div class="t">MRW</div></div><input type="number" id="cfg_mrw" /></div>
-            <div class="field"><div class="label"><div class="t">MTOM</div></div><input type="number" id="cfg_mtom" /></div>
-            <div class="field"><div class="label"><div class="t">MZFM</div></div><input type="number" id="cfg_mzfm" /></div>
-            <div class="field"><div class="label"><div class="t">MLM</div></div><input type="number" id="cfg_mlm" /></div>
-          </div>
-        </div>
-        <div class="card">
           <div class="card-head"><h2>CG Envelope</h2><div class="sub">vertices · mass / %MAC</div></div>
           <div id="envEditors"></div>
         </div>
@@ -127,10 +146,7 @@
           <div class="card-head"><h2>Import legacy XML</h2></div>
           <p class="hint">Paste &lt;INDEX&gt; / &lt;MAC&gt; / &lt;FWDCG…&gt; / &lt;AFTCG…&gt; tags to bootstrap a new aircraft.</p>
           <textarea id="xmlIn" placeholder='<INDEX STA="514" SCALE="11000" OFFSET="55"/> ...'></textarea>
-          <div style="margin-top:10px; display:flex; gap:10px">
-            <button class="btn primary" id="xmlImport">Import</button>
-            <button class="btn ghost" id="resetDefault">Reset to sample</button>
-          </div>
+          <div style="margin-top:10px"><button class="btn primary" id="xmlImport">Import</button></div>
         </div>
       </section>
     </main>

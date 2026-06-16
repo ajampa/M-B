@@ -35,6 +35,8 @@ export function renderEnvelopeSVG(aircraft, result, opts = {}) {
       <stop offset="1" stop-color="#1db954" stop-opacity="0.04"/>
     </linearGradient>
     <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="1" stdDeviation="1.4" flood-color="#0b1524" flood-opacity="0.25"/></filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#b06a00"/></marker>
   </defs>`);
   p.push(`<rect x="0" y="0" width="${W}" height="${H}" rx="12" fill="#fbfcfe"/>`);
   p.push(`<rect x="${m.left}" y="${m.top}" width="${iw}" height="${ih}" fill="#ffffff" stroke="#eef1f6"/>`);
@@ -59,10 +61,11 @@ export function renderEnvelopeSVG(aircraft, result, opts = {}) {
   // Takeoff/landing envelope (filled, primary).
   p.push(`<polygon points="${ring(aircraft.envelopes.TOL)}" fill="url(#tolFill)" stroke="#1db954" stroke-width="2"/>`);
 
-  // Fuel-burn path.
-  if (result?.burnPath?.length) {
+  // Fuel-burn path: solid line that bends as tanks empty in burn order,
+  // arrow pointing from TOM (full) toward LDM (reserves only).
+  if (result?.burnPath?.length > 1) {
     const d = result.burnPath.map((q, i) => `${i ? 'L' : 'M'}${sx(q.pctMac).toFixed(1)} ${sy(q.mass).toFixed(1)}`).join(' ');
-    p.push(`<path d="${d}" fill="none" stroke="#aab4c4" stroke-width="1.4" stroke-dasharray="2 3"/>`);
+    p.push(`<path d="${d}" fill="none" stroke="#d98a14" stroke-width="2.2" stroke-linecap="round" marker-end="url(#arrow)"/>`);
   }
 
   // Phase points + labels.
@@ -88,7 +91,8 @@ export function renderEnvelopeSVG(aircraft, result, opts = {}) {
   // Legend.
   p.push(`<g transform="translate(${m.left + 7} ${m.top + 6})" font-size="10">
     <rect x="0" y="0" width="13" height="3" rx="1.5" fill="#1db954"/><text x="18" y="4" fill="#5b6573">Takeoff/Landing</text>
-    <rect x="0" y="13" width="13" height="3" rx="1.5" fill="#9cc6ff"/><text x="18" y="17" fill="#5b6573">In-flight</text></g>`);
+    <rect x="0" y="13" width="13" height="3" rx="1.5" fill="#9cc6ff"/><text x="18" y="17" fill="#5b6573">In-flight</text>
+    <rect x="0" y="26" width="13" height="3" rx="1.5" fill="#d98a14"/><text x="18" y="30" fill="#5b6573">Fuel burn</text></g>`);
 
   p.push('</svg>');
   return p.join('\n');

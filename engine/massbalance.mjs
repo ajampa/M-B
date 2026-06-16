@@ -140,9 +140,9 @@ export function tankArm(tank, qty) {
   return t[t.length - 1][1];
 }
 
-// Distribute a total fuel mass across tanks. Tanks fill in `fillOrder` and burn
-// in `burnOrder`. Returns per-tank quantities and the combined {mass, moment, arm}.
-export function distributeFuel(tanks, totalMass) {
+// Fill a total fuel mass into tanks by `fillOrder` (lowest first). Returns the
+// per-tank quantity map.
+export function fillTanks(tanks, totalMass) {
   const byFill = [...tanks].sort((a, b) => (a.fillOrder ?? a.seq ?? 0) - (b.fillOrder ?? b.seq ?? 0));
   let remaining = Math.max(0, totalMass);
   const qty = {};
@@ -151,6 +151,26 @@ export function distributeFuel(tanks, totalMass) {
     qty[tk.name] = put;
     remaining -= put;
   }
+  return qty;
+}
+
+// Burn `burnAmount` out of an existing per-tank state in `burnOrder` (lowest
+// first), so a tank empties before the next one is touched. Returns a new map.
+export function burnTanks(tanks, startQty, burnAmount) {
+  const qty = { ...startQty };
+  const byBurn = [...tanks].sort((a, b) => (a.burnOrder ?? a.seq ?? 0) - (b.burnOrder ?? b.seq ?? 0));
+  let remaining = Math.max(0, burnAmount);
+  for (const tk of byBurn) {
+    const take = Math.min(remaining, qty[tk.name] || 0);
+    qty[tk.name] = (qty[tk.name] || 0) - take;
+    remaining -= take;
+  }
+  return qty;
+}
+
+// Combined mass/moment/arm of a per-tank quantity state, using each tank's
+// non-linear fuel-arm table.
+export function tankStateMoment(tanks, qty) {
   let mass = 0;
   let moment = 0;
   for (const tk of tanks) {
@@ -159,6 +179,11 @@ export function distributeFuel(tanks, totalMass) {
     moment += q * tankArm(tk, q);
   }
   return { qty, mass, moment, arm: mass === 0 ? 0 : moment / mass };
+}
+
+// Fill a total fuel mass and return its {qty, mass, moment, arm} in one step.
+export function distributeFuel(tanks, totalMass) {
+  return tankStateMoment(tanks, fillTanks(tanks, totalMass));
 }
 
 // EASA fuel chain. Ramp = Taxi + Trip + Contingency + Alternate + FinalReserve + Extra.
@@ -218,16 +243,21 @@ export function computeLoadsheet(aircraft, load) {
   const cargo = aggregate(load.cargo || []);
   const zfm = [dom, pax, cargo].reduce(combine, { mass: 0, moment: 0 });
 
-  // Fuel chain + fuel CG states.
+  // Fuel chain + fuel CG states. Tanks are FILLED by fillOrder; the in-flight
+  // state is the takeoff fill BURNED by burnOrder, so landing CG reflects the
+  // real drain sequence and each tank's fuel-arm table.
   const fc = fuelChain(load.fuel || {});
   const tanks = aircraft.tanks || [];
-  const takeoffFuel = tanks.length ? distributeFuel(tanks, fc.takeoff) : armlessFuel(fc.takeoff, aircraft);
-  const landingFuel = tanks.length ? distributeFuel(tanks, fc.landing) : armlessFuel(fc.landing, aircraft);
+  const hasTanks = tanks.length > 0;
+  const takeoffQty = hasTanks ? fillTanks(tanks, fc.takeoff) : null;
+  const landingQty = hasTanks ? burnTanks(tanks, takeoffQty, fc.takeoff - fc.landing) : null;
+  const takeoffFuel = hasTanks ? tankStateMoment(tanks, takeoffQty) : armlessFuel(fc.takeoff, aircraft);
+  const landingFuel = hasTanks ? tankStateMoment(tanks, landingQty) : armlessFuel(fc.landing, aircraft);
 
   // Phase mass/CG points.
   const tom = combine(zfm, takeoffFuel);
   const ldm = combine(zfm, landingFuel);
-  const ramp = combine(zfm, tanks.length ? distributeFuel(tanks, fc.ramp) : armlessFuel(fc.ramp, aircraft));
+  const ramp = combine(zfm, hasTanks ? distributeFuel(tanks, fc.ramp) : armlessFuel(fc.ramp, aircraft));
 
   const phases = {
     dom: describe(toPoint(dom), aircraft),
@@ -274,14 +304,22 @@ function armlessFuel(mass, aircraft) {
   return { mass, moment: mass * arm, arm };
 }
 
+// Sample the in-flight CG as the takeoff fuel is consumed in burn order, from
+// TOM (full takeoff fuel) down to LDM. Each sample uses the real per-tank
+// remaining quantity and fuel-arm table, so the path bends as tanks empty.
 function buildBurnPath(aircraft, zfm, tanks, fc) {
-  const steps = 8;
+  const steps = 24;
+  const hasTanks = tanks.length > 0;
+  const takeoffQty = hasTanks ? fillTanks(tanks, fc.takeoff) : null;
+  const burnTotal = fc.takeoff - fc.landing;
   const path = [];
   for (let i = 0; i <= steps; i++) {
-    const fuelMass = fc.takeoff - (i / steps) * (fc.takeoff - fc.landing);
-    const fuel = tanks.length ? distributeFuel(tanks, fuelMass) : armlessFuel(fuelMass, aircraft);
+    const burned = (i / steps) * burnTotal;
+    const fuel = hasTanks
+      ? tankStateMoment(tanks, burnTanks(tanks, takeoffQty, burned))
+      : armlessFuel(fc.takeoff - burned, aircraft);
     const pt = describe(toPoint(combine(zfm, fuel)), aircraft);
-    path.push({ ...pt, status: envelopeStatus(aircraft, 'FLT', pt.mass, pt.pctMac) });
+    path.push({ ...pt, fuelRemaining: fc.takeoff - burned, status: envelopeStatus(aircraft, 'FLT', pt.mass, pt.pctMac) });
   }
   return path;
 }

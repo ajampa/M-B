@@ -18,15 +18,15 @@
   --ink: #0b1524;
   --ink-2: #5b6573;
   --muted: #8a94a6;
-  --blue: #0a84ff;
-  --blue-ink: #0064d2;
-  --green: #1db954;
-  --green-ink: #0f8a3c;
-  --red: #ff3b30;
-  --amber: #ff9f0a;
-  --indigo: #5e5ce6;
-  --shadow: 0 1px 2px rgba(16,24,40,.04), 0 8px 24px rgba(16,24,40,.06);
-  --shadow-lg: 0 10px 40px rgba(16,24,40,.16);
+  --navy: #15293f;
+  --blue: #1f6feb;
+  --blue-ink: #1456c0;
+  --green: #1f8f4e;
+  --green-ink: #176b3b;
+  --red: #c0392b;
+  --amber: #b06a00;
+  --shadow: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.04);
+  --shadow-lg: 0 6px 24px rgba(16,24,40,.12);
   font-size: 16px;
 }
 
@@ -36,9 +36,8 @@ body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, sans-serif;
   color: var(--ink);
-  background: radial-gradient(1200px 600px at 70% -10%, #f6f9ff 0%, var(--bg) 45%, var(--bg2) 100%);
+  background: var(--bg);
   -webkit-font-smoothing: antialiased;
-  letter-spacing: -0.01em;
 }
 button { font-family: inherit; }
 
@@ -55,10 +54,10 @@ button { font-family: inherit; }
   .app-frame {
     margin: 20px auto;
     min-height: calc(100vh - 40px);
-    border-radius: 26px;
+    border-radius: 14px;
     overflow: hidden;
     box-shadow: var(--shadow-lg);
-    border: 1px solid rgba(255,255,255,.6);
+    border: 1px solid var(--line);
   }
 }
 
@@ -75,10 +74,9 @@ button { font-family: inherit; }
   position: sticky; top: 0; z-index: 30;
 }
 .appbar .mark {
-  width: 38px; height: 38px; border-radius: 11px;
-  background: linear-gradient(160deg, #0a84ff, #5e5ce6);
-  display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 15px;
-  box-shadow: 0 4px 12px rgba(10,132,255,.35);
+  width: 40px; height: 40px; border-radius: 8px;
+  background: var(--navy);
+  display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px; letter-spacing: .02em;
 }
 .appbar .title { font-size: 17px; font-weight: 700; line-height: 1.1; }
 .appbar .reg { font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
@@ -110,8 +108,8 @@ button { font-family: inherit; }
 }
 .navitem svg { width: 20px; height: 20px; flex: none; opacity: .85; }
 .navitem .count { margin-left: auto; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.navitem:hover { background: rgba(10,132,255,.06); }
-.navitem.active { background: var(--blue); color: #fff; box-shadow: 0 6px 16px rgba(10,132,255,.30); }
+.navitem:hover { background: rgba(31,111,235,.07); }
+.navitem.active { background: var(--navy); color: #fff; }
 .navitem.active svg { opacity: 1; }
 .navitem.active .count { color: rgba(255,255,255,.85); }
 .navitem .dot { width: 8px; height: 8px; border-radius: 50%; margin-left: auto; }
@@ -129,7 +127,7 @@ button { font-family: inherit; }
 @media (max-width: 1180px) { .side { position: static; } }
 
 .card {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   padding: 18px 20px; box-shadow: var(--shadow); margin-bottom: 16px;
 }
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
@@ -191,7 +189,8 @@ input.wide { width: 100%; text-align: left; }
   gap: 2px; user-select: none; transition: transform .08s, box-shadow .12s; box-shadow: inset 0 -3px 0 rgba(0,0,0,.04);
 }
 .seat:active { transform: scale(.94); }
-.seat .ic { font-size: 18px; line-height: 1; }
+.seat .ic { font-size: 15px; font-weight: 700; line-height: 1; }
+.seat.empty .ic { font-size: 12px; font-weight: 600; color: var(--muted); }
 .seat .kg { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .seat .sid { position: absolute; }
 .seat.male { background: #e8f1ff; border-color: #9cc6ff; }
@@ -208,13 +207,12 @@ input.wide { width: 100%; text-align: left; }
 .loadsheet tr.is-bad td { background: rgba(255,59,48,.05); }
 
 /* Pills / status */
-.pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; }
-.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.pill.good { background: rgba(29,185,84,.14); color: var(--green-ink); }
-.pill.bad { background: rgba(255,59,48,.13); color: #c4271d; }
-.pill.warn { background: rgba(255,159,10,.16); color: #b46a00; }
-.pill.flat::before { display: none; }
-.pill.blue { background: rgba(10,132,255,.12); color: var(--blue-ink); }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 5px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.pill.good { background: rgba(31,143,78,.13); color: var(--green-ink); }
+.pill.bad { background: rgba(192,57,43,.12); color: var(--red); }
+.pill.warn { background: rgba(176,106,0,.14); color: var(--amber); }
+.pill.blue { background: rgba(31,111,235,.11); color: var(--blue-ink); text-transform: none; letter-spacing: 0; }
+.pill.flat { background: transparent; }
 
 /* Big number readouts */
 .readouts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
@@ -222,7 +220,7 @@ input.wide { width: 100%; text-align: left; }
 .readout .v { font-size: 22px; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 .readout .v small { font-size: 12px; color: var(--muted); font-weight: 600; }
 .readout .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 700; margin-top: 2px; }
-.readout.accent { background: linear-gradient(160deg, #eaf4ff, #eef1ff); border-color: #d6e6ff; }
+.readout.accent { background: #fff; border-color: var(--navy); border-left-width: 3px; }
 
 /* Chart */
 .chart-card { padding: 14px; }
@@ -277,12 +275,7 @@ textarea { width: 100%; min-height: 88px; border: 1px solid var(--line-strong); 
           <div class="field"><div class="label"><div class="t">Route</div><div class="h">Departure → Destination</div></div><input type="text" id="fl_route" /></div>
           <div class="field"><div class="label"><div class="t">Alternate</div></div><input type="text" id="fl_alt" /></div>
         </div>
-        <div class="card">
-          <div class="card-head"><h2>Basic Mass &amp; Arm</h2><div class="sub">From weighing report</div></div>
-          <div class="field"><div class="label"><div class="t">Basic Mass</div><div class="h">Empty weighed mass (BM)</div></div><input type="number" id="basicMass" /><span class="unit">lb</span></div>
-          <div class="field"><div class="label"><div class="t">Basic Arm</div><div class="h">Basic CG arm (BARM)</div></div><input type="number" id="basicArm" step="0.01" /><span class="unit">in</span></div>
-          <p class="hint">Dry Operating Mass builds from here + crew + pantry.</p>
-        </div>
+        <p class="hint">Basic Mass, limits and tanks are set in <b>Dispatch</b>.</p>
       </section>
 
       <!-- CREW -->
@@ -332,8 +325,41 @@ textarea { width: 100%; min-height: 88px; border: 1px solid var(--line-strong); 
         </div>
       </section>
 
-      <!-- CONFIG -->
-      <section class="panel" id="panel-config">
+      <!-- DISPATCH: AIRCRAFT -->
+      <section class="panel" id="panel-aircraft">
+        <div class="card">
+          <div class="card-head"><h2>Aircraft</h2><div class="sub">Dispatch — identity &amp; weighing</div></div>
+          <div class="field"><div class="label"><div class="t">Type / registration</div></div><input type="text" class="wide" id="ac_name" /></div>
+          <div class="field"><div class="label"><div class="t">Basic Mass</div><div class="h">Empty weighed mass (BM)</div></div><input type="number" id="basicMass" /><span class="unit">lb</span></div>
+          <div class="field"><div class="label"><div class="t">Basic Arm</div><div class="h">Basic CG arm (BARM)</div></div><input type="number" id="basicArm" step="0.01" /><span class="unit">in</span></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Maximum Weights</h2><div class="sub">structural limits — lb</div></div>
+          <div class="grid2">
+            <div class="field"><div class="label"><div class="t">MRW</div><div class="h">Max ramp</div></div><input type="number" id="cfg_mrw" /></div>
+            <div class="field"><div class="label"><div class="t">MTOM</div><div class="h">Max takeoff</div></div><input type="number" id="cfg_mtom" /></div>
+            <div class="field"><div class="label"><div class="t">MZFM</div><div class="h">Max zero fuel</div></div><input type="number" id="cfg_mzfm" /></div>
+            <div class="field"><div class="label"><div class="t">MLM</div><div class="h">Max landing</div></div><input type="number" id="cfg_mlm" /></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Reset</h2></div>
+          <button class="btn ghost" id="resetDefault">Reset aircraft to sample</button>
+        </div>
+      </section>
+
+      <!-- DISPATCH: FUEL TANKS -->
+      <section class="panel" id="panel-tanks">
+        <div class="card">
+          <div class="card-head"><h2>Fuel Tanks</h2><div class="sub">Dispatch — arms &amp; burn order</div></div>
+          <p class="hint">Fill order = how fuel loads. Burn order = which tank empties first in flight. The arm table maps fuel quantity → CG arm (non-linear).</p>
+          <div id="tankEditors"></div>
+          <button class="btn small" id="addTank" style="margin-top:8px">+ Add tank</button>
+        </div>
+      </section>
+
+      <!-- DISPATCH: ENVELOPE & INDEX -->
+      <section class="panel" id="panel-envelope">
         <div class="card">
           <div class="card-head"><h2>Index System</h2></div>
           <div class="grid2">
@@ -352,15 +378,6 @@ textarea { width: 100%; min-height: 88px; border: 1px solid var(--line-strong); 
           <p class="hint">%MAC = (Arm − LEMAC) / MACLEN × 100</p>
         </div>
         <div class="card">
-          <div class="card-head"><h2>Structural Limits</h2><div class="sub">lb</div></div>
-          <div class="grid2">
-            <div class="field"><div class="label"><div class="t">MRW</div></div><input type="number" id="cfg_mrw" /></div>
-            <div class="field"><div class="label"><div class="t">MTOM</div></div><input type="number" id="cfg_mtom" /></div>
-            <div class="field"><div class="label"><div class="t">MZFM</div></div><input type="number" id="cfg_mzfm" /></div>
-            <div class="field"><div class="label"><div class="t">MLM</div></div><input type="number" id="cfg_mlm" /></div>
-          </div>
-        </div>
-        <div class="card">
           <div class="card-head"><h2>CG Envelope</h2><div class="sub">vertices · mass / %MAC</div></div>
           <div id="envEditors"></div>
         </div>
@@ -368,10 +385,7 @@ textarea { width: 100%; min-height: 88px; border: 1px solid var(--line-strong); 
           <div class="card-head"><h2>Import legacy XML</h2></div>
           <p class="hint">Paste &lt;INDEX&gt; / &lt;MAC&gt; / &lt;FWDCG…&gt; / &lt;AFTCG…&gt; tags to bootstrap a new aircraft.</p>
           <textarea id="xmlIn" placeholder='<INDEX STA="514" SCALE="11000" OFFSET="55"/> ...'></textarea>
-          <div style="margin-top:10px; display:flex; gap:10px">
-            <button class="btn primary" id="xmlImport">Import</button>
-            <button class="btn ghost" id="resetDefault">Reset to sample</button>
-          </div>
+          <div style="margin-top:10px"><button class="btn primary" id="xmlImport">Import</button></div>
         </div>
       </section>
     </main>
@@ -538,9 +552,9 @@ function tankArm(tank, qty) {
   return t[t.length - 1][1];
 }
 
-// Distribute a total fuel mass across tanks. Tanks fill in `fillOrder` and burn
-// in `burnOrder`. Returns per-tank quantities and the combined {mass, moment, arm}.
-function distributeFuel(tanks, totalMass) {
+// Fill a total fuel mass into tanks by `fillOrder` (lowest first). Returns the
+// per-tank quantity map.
+function fillTanks(tanks, totalMass) {
   const byFill = [...tanks].sort((a, b) => (a.fillOrder ?? a.seq ?? 0) - (b.fillOrder ?? b.seq ?? 0));
   let remaining = Math.max(0, totalMass);
   const qty = {};
@@ -549,6 +563,26 @@ function distributeFuel(tanks, totalMass) {
     qty[tk.name] = put;
     remaining -= put;
   }
+  return qty;
+}
+
+// Burn `burnAmount` out of an existing per-tank state in `burnOrder` (lowest
+// first), so a tank empties before the next one is touched. Returns a new map.
+function burnTanks(tanks, startQty, burnAmount) {
+  const qty = { ...startQty };
+  const byBurn = [...tanks].sort((a, b) => (a.burnOrder ?? a.seq ?? 0) - (b.burnOrder ?? b.seq ?? 0));
+  let remaining = Math.max(0, burnAmount);
+  for (const tk of byBurn) {
+    const take = Math.min(remaining, qty[tk.name] || 0);
+    qty[tk.name] = (qty[tk.name] || 0) - take;
+    remaining -= take;
+  }
+  return qty;
+}
+
+// Combined mass/moment/arm of a per-tank quantity state, using each tank's
+// non-linear fuel-arm table.
+function tankStateMoment(tanks, qty) {
   let mass = 0;
   let moment = 0;
   for (const tk of tanks) {
@@ -557,6 +591,11 @@ function distributeFuel(tanks, totalMass) {
     moment += q * tankArm(tk, q);
   }
   return { qty, mass, moment, arm: mass === 0 ? 0 : moment / mass };
+}
+
+// Fill a total fuel mass and return its {qty, mass, moment, arm} in one step.
+function distributeFuel(tanks, totalMass) {
+  return tankStateMoment(tanks, fillTanks(tanks, totalMass));
 }
 
 // EASA fuel chain. Ramp = Taxi + Trip + Contingency + Alternate + FinalReserve + Extra.
@@ -616,16 +655,21 @@ function computeLoadsheet(aircraft, load) {
   const cargo = aggregate(load.cargo || []);
   const zfm = [dom, pax, cargo].reduce(combine, { mass: 0, moment: 0 });
 
-  // Fuel chain + fuel CG states.
+  // Fuel chain + fuel CG states. Tanks are FILLED by fillOrder; the in-flight
+  // state is the takeoff fill BURNED by burnOrder, so landing CG reflects the
+  // real drain sequence and each tank's fuel-arm table.
   const fc = fuelChain(load.fuel || {});
   const tanks = aircraft.tanks || [];
-  const takeoffFuel = tanks.length ? distributeFuel(tanks, fc.takeoff) : armlessFuel(fc.takeoff, aircraft);
-  const landingFuel = tanks.length ? distributeFuel(tanks, fc.landing) : armlessFuel(fc.landing, aircraft);
+  const hasTanks = tanks.length > 0;
+  const takeoffQty = hasTanks ? fillTanks(tanks, fc.takeoff) : null;
+  const landingQty = hasTanks ? burnTanks(tanks, takeoffQty, fc.takeoff - fc.landing) : null;
+  const takeoffFuel = hasTanks ? tankStateMoment(tanks, takeoffQty) : armlessFuel(fc.takeoff, aircraft);
+  const landingFuel = hasTanks ? tankStateMoment(tanks, landingQty) : armlessFuel(fc.landing, aircraft);
 
   // Phase mass/CG points.
   const tom = combine(zfm, takeoffFuel);
   const ldm = combine(zfm, landingFuel);
-  const ramp = combine(zfm, tanks.length ? distributeFuel(tanks, fc.ramp) : armlessFuel(fc.ramp, aircraft));
+  const ramp = combine(zfm, hasTanks ? distributeFuel(tanks, fc.ramp) : armlessFuel(fc.ramp, aircraft));
 
   const phases = {
     dom: describe(toPoint(dom), aircraft),
@@ -672,14 +716,22 @@ function armlessFuel(mass, aircraft) {
   return { mass, moment: mass * arm, arm };
 }
 
+// Sample the in-flight CG as the takeoff fuel is consumed in burn order, from
+// TOM (full takeoff fuel) down to LDM. Each sample uses the real per-tank
+// remaining quantity and fuel-arm table, so the path bends as tanks empty.
 function buildBurnPath(aircraft, zfm, tanks, fc) {
-  const steps = 8;
+  const steps = 24;
+  const hasTanks = tanks.length > 0;
+  const takeoffQty = hasTanks ? fillTanks(tanks, fc.takeoff) : null;
+  const burnTotal = fc.takeoff - fc.landing;
   const path = [];
   for (let i = 0; i <= steps; i++) {
-    const fuelMass = fc.takeoff - (i / steps) * (fc.takeoff - fc.landing);
-    const fuel = tanks.length ? distributeFuel(tanks, fuelMass) : armlessFuel(fuelMass, aircraft);
+    const burned = (i / steps) * burnTotal;
+    const fuel = hasTanks
+      ? tankStateMoment(tanks, burnTanks(tanks, takeoffQty, burned))
+      : armlessFuel(fc.takeoff - burned, aircraft);
     const pt = describe(toPoint(combine(zfm, fuel)), aircraft);
-    path.push({ ...pt, status: envelopeStatus(aircraft, 'FLT', pt.mass, pt.pctMac) });
+    path.push({ ...pt, fuelRemaining: fc.takeoff - burned, status: envelopeStatus(aircraft, 'FLT', pt.mass, pt.pctMac) });
   }
   return path;
 }
@@ -819,6 +871,8 @@ function renderEnvelopeSVG(aircraft, result, opts = {}) {
       <stop offset="1" stop-color="#1db954" stop-opacity="0.04"/>
     </linearGradient>
     <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="1" stdDeviation="1.4" flood-color="#0b1524" flood-opacity="0.25"/></filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#b06a00"/></marker>
   </defs>`);
   p.push(`<rect x="0" y="0" width="${W}" height="${H}" rx="12" fill="#fbfcfe"/>`);
   p.push(`<rect x="${m.left}" y="${m.top}" width="${iw}" height="${ih}" fill="#ffffff" stroke="#eef1f6"/>`);
@@ -843,10 +897,11 @@ function renderEnvelopeSVG(aircraft, result, opts = {}) {
   // Takeoff/landing envelope (filled, primary).
   p.push(`<polygon points="${ring(aircraft.envelopes.TOL)}" fill="url(#tolFill)" stroke="#1db954" stroke-width="2"/>`);
 
-  // Fuel-burn path.
-  if (result?.burnPath?.length) {
+  // Fuel-burn path: solid line that bends as tanks empty in burn order,
+  // arrow pointing from TOM (full) toward LDM (reserves only).
+  if (result?.burnPath?.length > 1) {
     const d = result.burnPath.map((q, i) => `${i ? 'L' : 'M'}${sx(q.pctMac).toFixed(1)} ${sy(q.mass).toFixed(1)}`).join(' ');
-    p.push(`<path d="${d}" fill="none" stroke="#aab4c4" stroke-width="1.4" stroke-dasharray="2 3"/>`);
+    p.push(`<path d="${d}" fill="none" stroke="#d98a14" stroke-width="2.2" stroke-linecap="round" marker-end="url(#arrow)"/>`);
   }
 
   // Phase points + labels.
@@ -872,7 +927,8 @@ function renderEnvelopeSVG(aircraft, result, opts = {}) {
   // Legend.
   p.push(`<g transform="translate(${m.left + 7} ${m.top + 6})" font-size="10">
     <rect x="0" y="0" width="13" height="3" rx="1.5" fill="#1db954"/><text x="18" y="4" fill="#5b6573">Takeoff/Landing</text>
-    <rect x="0" y="13" width="13" height="3" rx="1.5" fill="#9cc6ff"/><text x="18" y="17" fill="#5b6573">In-flight</text></g>`);
+    <rect x="0" y="13" width="13" height="3" rx="1.5" fill="#9cc6ff"/><text x="18" y="17" fill="#5b6573">In-flight</text>
+    <rect x="0" y="26" width="13" height="3" rx="1.5" fill="#d98a14"/><text x="18" y="30" fill="#5b6573">Fuel burn</text></g>`);
 
   p.push('</svg>');
   return p.join('\n');
@@ -937,18 +993,21 @@ const I = {
   pax: '<circle cx="8" cy="8" r="2.6" fill="currentColor"/><path d="M3 18a5 5 0 0110 0z" fill="currentColor"/><circle cx="17" cy="9" r="2.2" fill="currentColor" opacity=".55"/><path d="M13 18a4 4 0 018 0z" fill="currentColor" opacity=".55"/>',
   cargo: '<path d="M4 8l8-4 8 4v8l-8 4-8-4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 8l8 4 8-4M12 12v8" stroke="currentColor" stroke-width="1.6"/>',
   fuel: '<path d="M6 3h7v18H6z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M13 8h3a2 2 0 012 2v6a1.5 1.5 0 01-3 0v-4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 12h7" stroke="currentColor" stroke-width="1.7"/>',
-  config: '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2 2M16.4 16.4l2 2M18.4 5.6l-2 2M7.6 16.4l-2 2" stroke="currentColor" stroke-width="1.6"/>',
+  aircraft: '<path d="M12 2.5c.6 0 1 .8 1 2.2V9l8 4.4v1.9L13 13v4.2l2.2 1.5v1.5L12 19.3 8.8 20.2v-1.5L11 17.2V13l-8 2.3v-1.9L11 9V4.7c0-1.4.4-2.2 1-2.2z" fill="currentColor"/>',
+  envelope: '<path d="M4 4v16h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 16l4-7 3 3 3-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 const NAV = [
-  { group: 'Loading' },
+  { group: 'Flight Load' },
   { id: 'flight', label: 'Flight', icon: I.flight },
   { id: 'crew', label: 'Crew', icon: I.crew },
   { id: 'pantry', label: 'Pantry', icon: I.pantry },
   { id: 'pax', label: 'Passengers', icon: I.pax, count: () => Object.values(state.pax).filter(Boolean).length },
   { id: 'cargo', label: 'Cargo', icon: I.cargo },
   { id: 'fuel', label: 'Fuel', icon: I.fuel },
-  { group: 'Aircraft' },
-  { id: 'config', label: 'Configure', icon: I.config },
+  { group: 'Dispatch' },
+  { id: 'aircraft', label: 'Aircraft', icon: I.aircraft },
+  { id: 'tanks', label: 'Fuel Tanks', icon: I.fuel },
+  { id: 'envelope', label: 'Envelope & Index', icon: I.envelope },
 ];
 let activePanel = 'flight';
 
@@ -970,7 +1029,9 @@ function renderNav() {
 }
 function showPanel() {
   document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === 'panel-' + activePanel));
-  if (activePanel === 'config') renderConfig();
+  if (activePanel === 'aircraft') renderAircraft();
+  else if (activePanel === 'tanks') renderTanks();
+  else if (activePanel === 'envelope') renderEnvelope();
 }
 
 // ---- panels -----------------------------------------------------------------
@@ -981,8 +1042,6 @@ function renderAll() {
   bindText('fl_no', () => state.flight.no, (v) => state.flight.no = v);
   bindText('fl_route', () => state.flight.route, (v) => state.flight.route = v);
   bindText('fl_alt', () => state.flight.alt, (v) => state.flight.alt = v);
-  bindNum('basicMass', 'basicMass');
-  bindNum('basicArm', 'basicArm');
   renderCrew(); renderPantry(); renderPaxBrush(); renderCabin(); renderCargo(); renderFuel();
   renderNav(); showPanel(); recompute();
 }
@@ -1036,8 +1095,8 @@ function renderCabin() {
 function seatEl(s) {
   const type = state.pax[s.id] || '';
   const d = div('seat ' + (type || 'empty'));
-  const icon = { male: '👤', female: '👤', child: '🧒' }[type] || s.id;
-  d.innerHTML = `<span class="ic">${type ? icon : ''}</span><span class="kg">${type ? stdMassFor(type) + 'lb' : s.id}</span>`;
+  const tag = { male: 'M', female: 'F', child: 'C' }[type] || '';
+  d.innerHTML = `<span class="ic">${type ? tag : s.id}</span><span class="kg">${type ? stdMassFor(type) + 'lb' : ''}</span>`;
   d.onclick = () => {
     if (state.pax[s.id] === brush) delete state.pax[s.id];
     else state.pax[s.id] = brush;
@@ -1103,15 +1162,55 @@ function renderVerdict(r) {
   v.className = 'verdict-bar bad'; v.innerHTML = '⚠ Out of limits: ' + issues.join(' · ');
 }
 
-// ---- config -----------------------------------------------------------------
-function renderConfig() {
+// ---- dispatch: aircraft -----------------------------------------------------
+function renderAircraft() {
+  el('ac_name').value = aircraft.name;
+  el('ac_name').oninput = (e) => { aircraft.name = e.target.value; el('acReg').textContent = aircraft.name; save(); };
+  bindNum('basicMass', 'basicMass');
+  bindNum('basicArm', 'basicArm');
+  for (const k of ['mrw', 'mtom', 'mzfm', 'mlm']) { el('cfg_' + k).value = aircraft.limits[k]; bindCfg('cfg_' + k, () => aircraft.limits, k); }
+}
+
+// ---- dispatch: fuel tanks ---------------------------------------------------
+function renderTanks() {
+  const host = el('tankEditors'); host.innerHTML = '';
+  (aircraft.tanks || []).forEach((tk, ti) => {
+    const det = document.createElement('details'); det.className = 'env-acc';
+    const rows = (tk.table || []).map((pt, i) =>
+      `<tr><td><input type="number" data-i="${i}" data-f="0" value="${pt[0]}"></td><td><input type="number" step="0.01" data-i="${i}" data-f="1" value="${pt[1]}"></td><td><button class="btn small ghost" data-del="${i}">✕</button></td></tr>`).join('');
+    det.innerHTML = `<summary>${tk.name} <span style="color:var(--muted)">· max ${fmt(tk.maxMass)} lb · fill ${tk.fillOrder ?? '-'} / burn ${tk.burnOrder ?? '-'}</span></summary>
+      <div class="grid2">
+        <div class="field"><div class="label"><div class="t">Name</div></div><input type="text" class="wide" data-k="name" value="${tk.name}"></div>
+        <div class="field"><div class="label"><div class="t">Max mass</div></div><input type="number" data-k="maxMass" value="${tk.maxMass}"><span class="unit">lb</span></div>
+        <div class="field"><div class="label"><div class="t">Fill order</div></div><input type="number" data-k="fillOrder" value="${tk.fillOrder ?? 1}"></div>
+        <div class="field"><div class="label"><div class="t">Burn order</div></div><input type="number" data-k="burnOrder" value="${tk.burnOrder ?? 1}"></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin:10px 0 4px">Fuel-arm table (quantity → CG arm)</div>
+      <table class="vtable"><thead><tr><th>Qty (lb)</th><th>Arm (in)</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <div style="margin-top:8px"><button class="btn small" data-add="1">+ Add point</button>
+        <button class="btn small ghost" data-deltank="1" style="margin-left:8px;color:var(--red)">Delete tank</button></div>`;
+    det.querySelectorAll('input[data-k]').forEach((inp) => inp.oninput = () => { const k = inp.dataset.k; tk[k] = k === 'name' ? inp.value : Number(inp.value); save(); recompute(); });
+    det.querySelectorAll('input[data-i]').forEach((inp) => inp.oninput = () => { tk.table[+inp.dataset.i][+inp.dataset.f] = Number(inp.value); save(); recompute(); });
+    det.querySelector('[data-add]').onclick = () => { const last = tk.table[tk.table.length - 1] || [0, aircraft.index.sta]; tk.table.push([last[0] + 1000, last[1]]); renderTanks(); recompute(); save(); };
+    det.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => { tk.table.splice(+b.dataset.del, 1); renderTanks(); recompute(); save(); });
+    det.querySelector('[data-deltank]').onclick = () => { aircraft.tanks.splice(ti, 1); renderTanks(); recompute(); save(); };
+    host.appendChild(det);
+  });
+}
+el('addTank').onclick = () => {
+  aircraft.tanks = aircraft.tanks || [];
+  const n = aircraft.tanks.length + 1;
+  aircraft.tanks.push({ name: 'New tank', maxMass: 1000, fillOrder: n, burnOrder: n, table: [[0, aircraft.index.sta], [1000, aircraft.index.sta]] });
+  renderTanks(); recompute(); save();
+};
+
+// ---- dispatch: envelope & index ---------------------------------------------
+function renderEnvelope() {
   const set = (id, v) => el(id).value = v;
   set('cfg_sta', aircraft.index.sta); set('cfg_scale', aircraft.index.scale); set('cfg_offset', aircraft.index.offset);
   set('cfg_lemac', aircraft.mac.lemac); set('cfg_maclen', aircraft.mac.maclen);
-  set('cfg_mrw', aircraft.limits.mrw); set('cfg_mtom', aircraft.limits.mtom); set('cfg_mzfm', aircraft.limits.mzfm); set('cfg_mlm', aircraft.limits.mlm);
   bindCfg('cfg_sta', () => aircraft.index, 'sta'); bindCfg('cfg_scale', () => aircraft.index, 'scale'); bindCfg('cfg_offset', () => aircraft.index, 'offset');
   bindCfg('cfg_lemac', () => aircraft.mac, 'lemac'); bindCfg('cfg_maclen', () => aircraft.mac, 'maclen');
-  for (const k of ['mrw', 'mtom', 'mzfm', 'mlm']) bindCfg('cfg_' + k, () => aircraft.limits, k);
   renderEnvEditors();
 }
 function bindCfg(id, target, key) { el(id).oninput = (e) => { target()[key] = Number(e.target.value); save(); recompute(); }; }
@@ -1133,11 +1232,12 @@ function renderEnvEditors() {
     host.appendChild(det);
   }
 }
+function renderDispatch() { renderAircraft(); renderTanks(); renderEnvelope(); }
 el('xmlImport').onclick = () => {
-  try { parseLegacyXml(el('xmlIn').value); save(); renderConfig(); recompute(); el('xmlIn').value = ''; alert('Imported. Review the values.'); }
+  try { parseLegacyXml(el('xmlIn').value); save(); renderDispatch(); recompute(); el('xmlIn').value = ''; alert('Imported. Review the values.'); }
   catch (e) { alert('Could not parse: ' + e.message); }
 };
-el('resetDefault').onclick = () => { if (confirm('Reset aircraft to the bundled sample?')) { aircraft = structuredClone(DEFAULT_AIRCRAFT); save(); renderConfig(); recompute(); } };
+el('resetDefault').onclick = () => { if (confirm('Reset aircraft to the bundled sample?')) { aircraft = structuredClone(DEFAULT_AIRCRAFT); state = freshLoad(); save(); renderAll(); } };
 function parseLegacyXml(xml) {
   const attr = (tag, name) => { const m = xml.match(new RegExp(`<${tag}[^>]*\\b${name}="([\\d.\\-]+)"`, 'i')); return m ? Number(m[1]) : null; };
   const pairs = (tag) => { const m = xml.match(new RegExp(`<${tag}>(.*?)</${tag}>`, 'is')); return m ? [...m[1].matchAll(/\(([\d.\-]+)\s*,\s*([\d.\-]+)\)/g)].map((g) => [Number(g[1]), Number(g[2])]) : null; };

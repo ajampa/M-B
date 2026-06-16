@@ -54,18 +54,21 @@ const I = {
   pax: '<circle cx="8" cy="8" r="2.6" fill="currentColor"/><path d="M3 18a5 5 0 0110 0z" fill="currentColor"/><circle cx="17" cy="9" r="2.2" fill="currentColor" opacity=".55"/><path d="M13 18a4 4 0 018 0z" fill="currentColor" opacity=".55"/>',
   cargo: '<path d="M4 8l8-4 8 4v8l-8 4-8-4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 8l8 4 8-4M12 12v8" stroke="currentColor" stroke-width="1.6"/>',
   fuel: '<path d="M6 3h7v18H6z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M13 8h3a2 2 0 012 2v6a1.5 1.5 0 01-3 0v-4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 12h7" stroke="currentColor" stroke-width="1.7"/>',
-  config: '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2 2M16.4 16.4l2 2M18.4 5.6l-2 2M7.6 16.4l-2 2" stroke="currentColor" stroke-width="1.6"/>',
+  aircraft: '<path d="M12 2.5c.6 0 1 .8 1 2.2V9l8 4.4v1.9L13 13v4.2l2.2 1.5v1.5L12 19.3 8.8 20.2v-1.5L11 17.2V13l-8 2.3v-1.9L11 9V4.7c0-1.4.4-2.2 1-2.2z" fill="currentColor"/>',
+  envelope: '<path d="M4 4v16h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 16l4-7 3 3 3-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 const NAV = [
-  { group: 'Loading' },
+  { group: 'Flight Load' },
   { id: 'flight', label: 'Flight', icon: I.flight },
   { id: 'crew', label: 'Crew', icon: I.crew },
   { id: 'pantry', label: 'Pantry', icon: I.pantry },
   { id: 'pax', label: 'Passengers', icon: I.pax, count: () => Object.values(state.pax).filter(Boolean).length },
   { id: 'cargo', label: 'Cargo', icon: I.cargo },
   { id: 'fuel', label: 'Fuel', icon: I.fuel },
-  { group: 'Aircraft' },
-  { id: 'config', label: 'Configure', icon: I.config },
+  { group: 'Dispatch' },
+  { id: 'aircraft', label: 'Aircraft', icon: I.aircraft },
+  { id: 'tanks', label: 'Fuel Tanks', icon: I.fuel },
+  { id: 'envelope', label: 'Envelope & Index', icon: I.envelope },
 ];
 let activePanel = 'flight';
 
@@ -87,7 +90,9 @@ function renderNav() {
 }
 function showPanel() {
   document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === 'panel-' + activePanel));
-  if (activePanel === 'config') renderConfig();
+  if (activePanel === 'aircraft') renderAircraft();
+  else if (activePanel === 'tanks') renderTanks();
+  else if (activePanel === 'envelope') renderEnvelope();
 }
 
 // ---- panels -----------------------------------------------------------------
@@ -98,8 +103,6 @@ function renderAll() {
   bindText('fl_no', () => state.flight.no, (v) => state.flight.no = v);
   bindText('fl_route', () => state.flight.route, (v) => state.flight.route = v);
   bindText('fl_alt', () => state.flight.alt, (v) => state.flight.alt = v);
-  bindNum('basicMass', 'basicMass');
-  bindNum('basicArm', 'basicArm');
   renderCrew(); renderPantry(); renderPaxBrush(); renderCabin(); renderCargo(); renderFuel();
   renderNav(); showPanel(); recompute();
 }
@@ -153,8 +156,8 @@ function renderCabin() {
 function seatEl(s) {
   const type = state.pax[s.id] || '';
   const d = div('seat ' + (type || 'empty'));
-  const icon = { male: '👤', female: '👤', child: '🧒' }[type] || s.id;
-  d.innerHTML = `<span class="ic">${type ? icon : ''}</span><span class="kg">${type ? stdMassFor(type) + 'lb' : s.id}</span>`;
+  const tag = { male: 'M', female: 'F', child: 'C' }[type] || '';
+  d.innerHTML = `<span class="ic">${type ? tag : s.id}</span><span class="kg">${type ? stdMassFor(type) + 'lb' : ''}</span>`;
   d.onclick = () => {
     if (state.pax[s.id] === brush) delete state.pax[s.id];
     else state.pax[s.id] = brush;
@@ -220,15 +223,55 @@ function renderVerdict(r) {
   v.className = 'verdict-bar bad'; v.innerHTML = '⚠ Out of limits: ' + issues.join(' · ');
 }
 
-// ---- config -----------------------------------------------------------------
-function renderConfig() {
+// ---- dispatch: aircraft -----------------------------------------------------
+function renderAircraft() {
+  el('ac_name').value = aircraft.name;
+  el('ac_name').oninput = (e) => { aircraft.name = e.target.value; el('acReg').textContent = aircraft.name; save(); };
+  bindNum('basicMass', 'basicMass');
+  bindNum('basicArm', 'basicArm');
+  for (const k of ['mrw', 'mtom', 'mzfm', 'mlm']) { el('cfg_' + k).value = aircraft.limits[k]; bindCfg('cfg_' + k, () => aircraft.limits, k); }
+}
+
+// ---- dispatch: fuel tanks ---------------------------------------------------
+function renderTanks() {
+  const host = el('tankEditors'); host.innerHTML = '';
+  (aircraft.tanks || []).forEach((tk, ti) => {
+    const det = document.createElement('details'); det.className = 'env-acc';
+    const rows = (tk.table || []).map((pt, i) =>
+      `<tr><td><input type="number" data-i="${i}" data-f="0" value="${pt[0]}"></td><td><input type="number" step="0.01" data-i="${i}" data-f="1" value="${pt[1]}"></td><td><button class="btn small ghost" data-del="${i}">✕</button></td></tr>`).join('');
+    det.innerHTML = `<summary>${tk.name} <span style="color:var(--muted)">· max ${fmt(tk.maxMass)} lb · fill ${tk.fillOrder ?? '-'} / burn ${tk.burnOrder ?? '-'}</span></summary>
+      <div class="grid2">
+        <div class="field"><div class="label"><div class="t">Name</div></div><input type="text" class="wide" data-k="name" value="${tk.name}"></div>
+        <div class="field"><div class="label"><div class="t">Max mass</div></div><input type="number" data-k="maxMass" value="${tk.maxMass}"><span class="unit">lb</span></div>
+        <div class="field"><div class="label"><div class="t">Fill order</div></div><input type="number" data-k="fillOrder" value="${tk.fillOrder ?? 1}"></div>
+        <div class="field"><div class="label"><div class="t">Burn order</div></div><input type="number" data-k="burnOrder" value="${tk.burnOrder ?? 1}"></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin:10px 0 4px">Fuel-arm table (quantity → CG arm)</div>
+      <table class="vtable"><thead><tr><th>Qty (lb)</th><th>Arm (in)</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <div style="margin-top:8px"><button class="btn small" data-add="1">+ Add point</button>
+        <button class="btn small ghost" data-deltank="1" style="margin-left:8px;color:var(--red)">Delete tank</button></div>`;
+    det.querySelectorAll('input[data-k]').forEach((inp) => inp.oninput = () => { const k = inp.dataset.k; tk[k] = k === 'name' ? inp.value : Number(inp.value); save(); recompute(); });
+    det.querySelectorAll('input[data-i]').forEach((inp) => inp.oninput = () => { tk.table[+inp.dataset.i][+inp.dataset.f] = Number(inp.value); save(); recompute(); });
+    det.querySelector('[data-add]').onclick = () => { const last = tk.table[tk.table.length - 1] || [0, aircraft.index.sta]; tk.table.push([last[0] + 1000, last[1]]); renderTanks(); recompute(); save(); };
+    det.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => { tk.table.splice(+b.dataset.del, 1); renderTanks(); recompute(); save(); });
+    det.querySelector('[data-deltank]').onclick = () => { aircraft.tanks.splice(ti, 1); renderTanks(); recompute(); save(); };
+    host.appendChild(det);
+  });
+}
+el('addTank').onclick = () => {
+  aircraft.tanks = aircraft.tanks || [];
+  const n = aircraft.tanks.length + 1;
+  aircraft.tanks.push({ name: 'New tank', maxMass: 1000, fillOrder: n, burnOrder: n, table: [[0, aircraft.index.sta], [1000, aircraft.index.sta]] });
+  renderTanks(); recompute(); save();
+};
+
+// ---- dispatch: envelope & index ---------------------------------------------
+function renderEnvelope() {
   const set = (id, v) => el(id).value = v;
   set('cfg_sta', aircraft.index.sta); set('cfg_scale', aircraft.index.scale); set('cfg_offset', aircraft.index.offset);
   set('cfg_lemac', aircraft.mac.lemac); set('cfg_maclen', aircraft.mac.maclen);
-  set('cfg_mrw', aircraft.limits.mrw); set('cfg_mtom', aircraft.limits.mtom); set('cfg_mzfm', aircraft.limits.mzfm); set('cfg_mlm', aircraft.limits.mlm);
   bindCfg('cfg_sta', () => aircraft.index, 'sta'); bindCfg('cfg_scale', () => aircraft.index, 'scale'); bindCfg('cfg_offset', () => aircraft.index, 'offset');
   bindCfg('cfg_lemac', () => aircraft.mac, 'lemac'); bindCfg('cfg_maclen', () => aircraft.mac, 'maclen');
-  for (const k of ['mrw', 'mtom', 'mzfm', 'mlm']) bindCfg('cfg_' + k, () => aircraft.limits, k);
   renderEnvEditors();
 }
 function bindCfg(id, target, key) { el(id).oninput = (e) => { target()[key] = Number(e.target.value); save(); recompute(); }; }
@@ -250,11 +293,12 @@ function renderEnvEditors() {
     host.appendChild(det);
   }
 }
+function renderDispatch() { renderAircraft(); renderTanks(); renderEnvelope(); }
 el('xmlImport').onclick = () => {
-  try { parseLegacyXml(el('xmlIn').value); save(); renderConfig(); recompute(); el('xmlIn').value = ''; alert('Imported. Review the values.'); }
+  try { parseLegacyXml(el('xmlIn').value); save(); renderDispatch(); recompute(); el('xmlIn').value = ''; alert('Imported. Review the values.'); }
   catch (e) { alert('Could not parse: ' + e.message); }
 };
-el('resetDefault').onclick = () => { if (confirm('Reset aircraft to the bundled sample?')) { aircraft = structuredClone(DEFAULT_AIRCRAFT); save(); renderConfig(); recompute(); } };
+el('resetDefault').onclick = () => { if (confirm('Reset aircraft to the bundled sample?')) { aircraft = structuredClone(DEFAULT_AIRCRAFT); state = freshLoad(); save(); renderAll(); } };
 function parseLegacyXml(xml) {
   const attr = (tag, name) => { const m = xml.match(new RegExp(`<${tag}[^>]*\\b${name}="([\\d.\\-]+)"`, 'i')); return m ? Number(m[1]) : null; };
   const pairs = (tag) => { const m = xml.match(new RegExp(`<${tag}>(.*?)</${tag}>`, 'is')); return m ? [...m[1].matchAll(/\(([\d.\-]+)\s*,\s*([\d.\-]+)\)/g)].map((g) => [Number(g[1]), Number(g[2])]) : null; };
