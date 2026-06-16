@@ -15,6 +15,10 @@
     <div class="mark">M&amp;B</div>
     <div><div class="title">Trim</div></div>
     <button class="acpick" id="acPick"><span class="acpick-reg" id="acReg">—</span><span class="acpick-type" id="acType"></span><span class="caret">▾</span></button>
+    <div class="seg mode-seg" id="modeSeg">
+      <button data-mode="pilot" class="on">Pilot</button>
+      <button data-mode="dispatch">Dispatch</button>
+    </div>
     <div class="spacer"></div>
     <div class="flightpick" id="flightPick">
       <span>Flight</span><b id="flightNo">—</b><span>·</span><span id="flightRoute"></span>
@@ -113,30 +117,54 @@
           </div>
           <p class="hint">Used by both seat-map and section seating.</p>
         </div>
+      </section>
+
+      <!-- DISPATCH: CREW -->
+      <section class="panel" id="panel-d-crew">
         <div class="card">
           <div class="card-head"><h2>Crew Stations</h2><div class="sub">name · default mass · arm</div></div>
           <div id="crewEditor"></div>
         </div>
+      </section>
+
+      <!-- DISPATCH: PANTRY -->
+      <section class="panel" id="panel-d-pantry">
         <div class="card">
           <div class="card-head"><h2>Pantry Items</h2><div class="sub">name · default · max · arm</div></div>
           <div id="pantryEditor"></div>
         </div>
+      </section>
+
+      <!-- DISPATCH: CARGO -->
+      <section class="panel" id="panel-d-cargo">
         <div class="card">
-          <div class="card-head"><h2>Fleet</h2><div class="sub">this aircraft</div></div>
+          <div class="card-head"><h2>Cargo Holds</h2><div class="sub">name · arm · max</div></div>
+          <div id="cargoEditor"></div>
+        </div>
+      </section>
+
+      <!-- DISPATCH: PASSENGERS (config) -->
+      <section class="panel" id="panel-seats">
+        <div class="card">
+          <div class="card-head"><h2>Cabin Seating</h2><div class="sub">seats / sections · arms</div></div>
+          <div id="seatEditors"></div>
+        </div>
+      </section>
+
+      <!-- DISPATCH: FLEET -->
+      <section class="panel" id="panel-d-fleet">
+        <div class="card">
+          <div class="card-head"><h2>Fleet</h2><div class="sub">all aircraft</div></div>
+          <div id="fleetList"></div>
+          <div style="margin-top:12px"><button class="btn primary" id="addAircraftBtn">+ Add aircraft</button></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>This aircraft</h2></div>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <button class="btn" id="dupAircraft">Duplicate</button>
             <button class="btn ghost" id="delAircraft" style="color:var(--red)">Delete</button>
             <button class="btn ghost" id="resetDefault">Reset to template</button>
           </div>
-          <p class="hint">Use the aircraft name in the top bar to switch or add aircraft.</p>
-        </div>
-      </section>
-
-      <!-- DISPATCH: CABIN SEATS -->
-      <section class="panel" id="panel-seats">
-        <div class="card">
-          <div class="card-head"><h2>Cabin Seats</h2><div class="sub">Dispatch — add / remove / arm</div></div>
-          <div id="seatEditors"></div>
         </div>
       </section>
 

@@ -1,4 +1,4 @@
-// Auto-mirrored from engine/atr.json — keep in sync (JSON is canonical).
+// mirror
 export default {
   "id": "atr72-eigpp",
   "name": "EI-GPP",

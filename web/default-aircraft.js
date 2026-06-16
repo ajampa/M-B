@@ -1,4 +1,4 @@
-// Auto-mirrored from engine/sample-aircraft.json — keep in sync (JSON is canonical).
+// mirror
 export default {
   "id": "d-abei",
   "name": "D-ABEI",

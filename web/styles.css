@@ -281,6 +281,18 @@ input.wide { width: 100%; text-align: left; }
 .he-c { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; line-height: 1.5; }
 .he-c.more { color: var(--muted); }
 .he-c b { font-weight: 700; color: var(--ink); }
+
+/* mode toggle (on the dark command bar) */
+.mode-seg { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); padding: 3px; }
+.mode-seg button { color: rgba(255,255,255,.72); padding: 7px 16px; }
+.mode-seg button.on { background: #fff; color: var(--navy); }
+.app-frame.dispatch-mode .appbar { border-bottom-color: var(--amber); }
+
+/* fleet list */
+.fleet-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; background: #fff; }
+.fleet-row.active { border-color: var(--navy); background: #f4f7fb; }
+.fl-name { font-weight: 700; font-size: 15px; }
+.fl-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .seat .kg { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .seat .sid { position: absolute; }
 .seat.male { background: #e6edf5; border-color: #aebfd4; }
@@ -309,12 +321,12 @@ input.wide { width: 100%; text-align: left; }
 
 /* Big number readouts */
 .readouts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-/* data tile — clean, no heavy bottom bar */
-.readout { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+/* data tile — keep the tile look, no dark bottom bar/edge */
+.readout { background: #fff; border: 1px solid var(--line-strong); border-radius: 10px; padding: 12px 14px; }
 .readout .v { font-size: 22px; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--navy); }
 .readout .v small { font-size: 12px; color: var(--muted); font-weight: 600; }
 .readout .k { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; font-weight: 700; margin-top: 3px; }
-.readout.accent { background: #fff; border-left: 3px solid var(--navy); }
+.readout.accent { border-left: 3px solid var(--navy); }
 
 /* Chart */
 .chart-card { padding: 14px; }

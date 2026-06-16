@@ -63,9 +63,22 @@ function flushHistory() {
   if (histTimer) { clearTimeout(histTimer); histTimer = null; }
   const changes = diffAircraft(lastSnapshot, aircraft);
   if (changes.length) {
-    histories[selected].push({ ts: Date.now(), changes, before: lastSnapshot, after: clone(aircraft) });
     const h = histories[selected];
-    if (h.length > 40) h.splice(0, h.length - 40);
+    const top = h[h.length - 1];
+    // Coalesce: if this batch only touches fields already in the last entry
+    // (e.g. tapping a stepper repeatedly), merge into it so we keep ONE net
+    // change (original 'from' -> latest 'to') instead of one row per press.
+    const canMerge = top && changes.every((c) => top.changes.some((x) => x.key === c.key));
+    if (canMerge) {
+      for (const c of changes) {
+        const ex = top.changes.find((x) => x.key === c.key);
+        if (c.label != null) { ex.to = c.to; } else { ex.desc = c.desc; }
+      }
+      top.ts = Date.now(); top.after = clone(aircraft);
+    } else {
+      h.push({ ts: Date.now(), changes, before: lastSnapshot, after: clone(aircraft) });
+      if (h.length > 60) h.splice(0, h.length - 60);
+    }
     lastSnapshot = clone(aircraft);
     persist();
   }
@@ -90,22 +103,69 @@ function discardDraft() {
   drafts[selected] = c; aircraft = c; lastSnapshot = clone(c); histories[selected] = [];
   save(); renderAll();
 }
-// Recursive diff of two aircraft snapshots -> list of {path, from, to, kind}.
-function diffAircraft(a, b, path = '', out = []) {
-  const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
-  for (const k of keys) {
-    if (k.startsWith('_')) continue;
-    const pa = a ? a[k] : undefined, pb = b ? b[k] : undefined;
-    const p = path ? path + '.' + k : k;
-    if (pa === pb) continue;
-    const oa = pa && typeof pa === 'object', ob = pb && typeof pb === 'object';
-    if (pa === undefined) out.push({ path: p, kind: 'add' });
-    else if (pb === undefined) out.push({ path: p, kind: 'remove' });
-    else if (Array.isArray(pa) || Array.isArray(pb)) { if (JSON.stringify(pa) !== JSON.stringify(pb)) out.push({ path: p, kind: 'arr' }); }
-    else if (oa || ob) diffAircraft(pa, pb, p, out);
-    else if (pa !== pb) out.push({ path: p, kind: 'val', from: pa, to: pb });
+// Domain-aware diff of two aircraft snapshots. Returns change objects:
+//   scalar:     { key, label, from, to, unit }
+//   structural: { key, desc }
+function fmtN(v) { return typeof v === 'number' ? (+v.toFixed(3)) : (v == null ? '—' : String(v)); }
+function getPath(o, p) { return p.split('.').reduce((x, k) => (x ? x[k] : undefined), o); }
+function nameOf(it, id) { return it?.label ?? it?.name ?? id; }
+function diffAircraft(a, b) {
+  const out = []; const mu = massU(), au = armU();
+  const S = (key, label, from, to, unit) => { if (from !== to) out.push({ key, label, from, to, unit }); };
+  const D = (key, desc) => out.push({ key, desc });
+  S('name', 'Name', a.name, b.name);
+  S('sectionArmMode', 'Section arm', a.sectionArmMode || 'mean', b.sectionArmMode || 'mean');
+  for (const [grp, label, unit] of [['index', 'Index', ''], ['mac', 'MAC', au], ['limits', 'Limit', mu], ['standardMasses', 'Std mass', mu]]) {
+    const ma = a[grp] || {}, mb = b[grp] || {};
+    for (const k of new Set([...Object.keys(ma), ...Object.keys(mb)])) { if (k.startsWith('_')) continue; S(`${grp}.${k}`, `${label} ${k}`, ma[k], mb[k], unit); }
   }
+  const lists = [
+    ['stations.crew', 'Crew', [['label', 'name', ''], ['mass', 'mass', mu], ['arm', 'arm', au]]],
+    ['stations.pantry', 'Pantry', [['label', 'name', ''], ['mass', 'default', mu], ['maxMass', 'max', mu], ['arm', 'arm', au]]],
+    ['stations.cargo', 'Cargo', [['label', 'name', ''], ['arm', 'arm', au], ['maxMass', 'max', mu]]],
+    ['stations.pax', 'Seat', [['label', 'name', ''], ['arm', 'arm', au], ['row', 'row', ''], ['rail', 'rail', ''], ['rot', 'facing', ''], ['type', 'type', ''], ['length', 'length', au]]],
+    ['cabinRows', 'Row', [['label', 'name', ''], ['section', 'section', ''], ['arm', 'arm', au], ['capacity', 'capacity', '']]],
+  ];
+  for (const [base, label, fields] of lists) diffList(getPath(a, base) || [], getPath(b, base) || [], base, label, fields, out);
+  diffTanks(a.tanks || [], b.tanks || [], out, mu, au);
+  for (const phase of ['TOL', 'FLT']) for (const side of ['fwd', 'aft'])
+    diffPairs((a.envelopes?.[phase]?.[side]) || [], (b.envelopes?.[phase]?.[side]) || [], `env.${phase}.${side}`, `Envelope ${phase} ${side}`, out);
   return out;
+}
+function diffList(la, lb, base, label, fields, out) {
+  const byId = (arr) => { const m = {}; arr.forEach((it, i) => m[it.id ?? ('#' + i)] = it); return m; };
+  const ma = byId(la), mb = byId(lb);
+  for (const id of new Set([...Object.keys(ma), ...Object.keys(mb)])) {
+    const ia = ma[id], ib = mb[id];
+    if (!ia) { out.push({ key: `${base}.${id}`, desc: `${label} '${nameOf(ib, id)}' added` }); continue; }
+    if (!ib) { out.push({ key: `${base}.${id}`, desc: `${label} '${nameOf(ia, id)}' removed` }); continue; }
+    for (const [fk, fl, unit] of fields) if (ia[fk] !== ib[fk]) out.push({ key: `${base}.${id}.${fk}`, label: `${label} '${nameOf(ib, id)}' ${fl}`, from: ia[fk], to: ib[fk], unit });
+  }
+}
+function diffTanks(ta, tb, out, mu, au) {
+  const byName = (arr) => { const m = {}; arr.forEach((t) => m[t.name] = t); return m; };
+  const ma = byName(ta), mb = byName(tb);
+  for (const name of new Set([...Object.keys(ma), ...Object.keys(mb)])) {
+    const a = ma[name], b = mb[name];
+    if (!a) { out.push({ key: `tank.${name}`, desc: `Tank '${name}' added` }); continue; }
+    if (!b) { out.push({ key: `tank.${name}`, desc: `Tank '${name}' removed` }); continue; }
+    for (const [fk, fl, unit] of [['maxMass', 'max', mu], ['fillOrder', 'fill order', ''], ['burnOrder', 'burn order', ''], ['minReserve', 'min reserve', mu]])
+      if (a[fk] !== b[fk]) out.push({ key: `tank.${name}.${fk}`, label: `Tank '${name}' ${fl}`, from: a[fk], to: b[fk], unit });
+    for (const [tk, tl] of [['table', 'fuel-arm table'], ['fwdLimit', 'fwd CG limit'], ['aftLimit', 'aft CG limit']])
+      diffPairs(a[tk] || [], b[tk] || [], `tank.${name}.${tk}`, `Tank '${name}' ${tl}`, out);
+  }
+}
+function diffPairs(pa, pb, key, label, out) {
+  if (JSON.stringify(pa) === JSON.stringify(pb)) return;
+  const n = Math.max(pa.length, pb.length); const chg = [];
+  for (let i = 0; i < n; i++) {
+    const ra = pa[i], rb = pb[i];
+    if (!ra) { chg.push(`+(${rb.join(', ')})`); continue; }
+    if (!rb) { chg.push(`−(${ra.join(', ')})`); continue; }
+    if (ra[0] !== rb[0] || ra[1] !== rb[1]) chg.push(`@${fmtN(rb[0])}: ${fmtN(ra[1])}→${fmtN(rb[1])}`);
+  }
+  if (!chg.length) return;
+  out.push({ key, desc: `${label}${chg.length <= 2 ? ' (' + chg.join('; ') + ')' : ' — ' + chg.length + ' points'}` });
 }
 
 // Unit labels come from the selected aircraft.
@@ -211,30 +271,40 @@ const I = {
   aircraft: '<path d="M12 2.5c.6 0 1 .8 1 2.2V9l8 4.4v1.9L13 13v4.2l2.2 1.5v1.5L12 19.3 8.8 20.2v-1.5L11 17.2V13l-8 2.3v-1.9L11 9V4.7c0-1.4.4-2.2 1-2.2z" fill="currentColor"/>',
   envelope: '<path d="M4 4v16h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 16l4-7 3 3 3-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
 };
-const NAV = [
-  { group: 'Flight Load' },
-  { id: 'flight', label: 'Flight', icon: I.flight },
-  { id: 'crew', label: 'Crew', icon: I.crew },
-  { id: 'pantry', label: 'Pantry', icon: I.pantry },
-  { id: 'pax', label: 'Passengers', icon: I.pax, count: () => Object.values(state.pax).filter(Boolean).length },
-  { id: 'cargo', label: 'Cargo', icon: I.cargo },
-  { id: 'fuel', label: 'Fuel', icon: I.fuel },
-  { group: 'Dispatch' },
-  { id: 'aircraft', label: 'Aircraft', icon: I.aircraft },
-  { id: 'seats', label: 'Cabin Seats', icon: I.pax },
-  { id: 'tanks', label: 'Fuel Tanks', icon: I.fuel },
-  { id: 'envelope', label: 'Envelope & Index', icon: I.envelope },
+I.fleet = '<rect x="3" y="4" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="3" y="10" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="3" y="16" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="1.7"/>';
+// Pilot and Dispatch are two modes. Dispatch mirrors the pilot sections but each
+// page edits the aircraft CONFIG (staged) instead of the per-flight load.
+const NAV_PILOT = [
+  { id: 'flight', label: 'Flight', icon: I.flight, panel: 'panel-flight' },
+  { id: 'crew', label: 'Crew', icon: I.crew, panel: 'panel-crew' },
+  { id: 'pantry', label: 'Pantry', icon: I.pantry, panel: 'panel-pantry' },
+  { id: 'pax', label: 'Passengers', icon: I.pax, panel: 'panel-pax', count: () => loadPaxCount() },
+  { id: 'cargo', label: 'Cargo', icon: I.cargo, panel: 'panel-cargo' },
+  { id: 'fuel', label: 'Fuel', icon: I.fuel, panel: 'panel-fuel' },
 ];
+const NAV_DISPATCH = [
+  { id: 'fleet', label: 'Fleet', icon: I.fleet, panel: 'panel-d-fleet', render: renderFleet },
+  { id: 'aircraft', label: 'Aircraft', icon: I.aircraft, panel: 'panel-aircraft', render: renderAircraft },
+  { id: 'crew', label: 'Crew', icon: I.crew, panel: 'panel-d-crew', render: renderCrewEditor },
+  { id: 'pantry', label: 'Pantry', icon: I.pantry, panel: 'panel-d-pantry', render: renderPantryEditor },
+  { id: 'pax', label: 'Passengers', icon: I.pax, panel: 'panel-seats', render: renderSeats },
+  { id: 'cargo', label: 'Cargo', icon: I.cargo, panel: 'panel-d-cargo', render: renderCargoEditor },
+  { id: 'fuel', label: 'Fuel', icon: I.fuel, panel: 'panel-tanks', render: renderTanks },
+  { id: 'envelope', label: 'Envelope & Index', icon: I.envelope, panel: 'panel-envelope', render: renderEnvelope },
+];
+let mode = 'pilot';
 let activePanel = 'flight';
+function currentNav() { return mode === 'dispatch' ? NAV_DISPATCH : NAV_PILOT; }
+function loadPaxCount() {
+  if (aircraft.cabinRows) { let t = 0; for (const sec of cabinSections()) t += sectionTotal(sectionCounts(sec.label)); return t; }
+  return Object.values(state.pax || {}).filter(Boolean).length;
+}
 
 function renderNav() {
-  const nav = el('nav');
-  nav.innerHTML = '';
-  for (const item of NAV) {
-    if (item.group) {
-      const g = document.createElement('div'); g.className = 'group-label'; g.textContent = item.group;
-      nav.appendChild(g); continue;
-    }
+  const nav = el('nav'); nav.innerHTML = '';
+  const g = document.createElement('div'); g.className = 'group-label'; g.textContent = mode === 'dispatch' ? 'Dispatch — edit config' : 'Flight load';
+  nav.appendChild(g);
+  for (const item of currentNav()) {
     const b = document.createElement('button');
     b.className = 'navitem' + (item.id === activePanel ? ' active' : '');
     const cnt = item.count ? `<span class="count">${item.count()}</span>` : '';
@@ -244,12 +314,20 @@ function renderNav() {
   }
 }
 function showPanel() {
-  document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === 'panel-' + activePanel));
-  if (activePanel === 'aircraft') renderAircraft();
-  else if (activePanel === 'seats') renderSeats();
-  else if (activePanel === 'tanks') renderTanks();
-  else if (activePanel === 'envelope') renderEnvelope();
+  const nav = currentNav();
+  const item = nav.find((x) => x.id === activePanel) || nav[0];
+  activePanel = item.id;
+  document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === item.panel));
+  if (item.render) item.render();
 }
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('#modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
+  document.querySelector('.app-frame').classList.toggle('dispatch-mode', m === 'dispatch');
+  activePanel = currentNav()[0].id;
+  renderNav(); showPanel();
+}
+document.querySelectorAll('#modeSeg button').forEach((b) => b.onclick = () => setMode(b.dataset.mode));
 
 // ---- aircraft picker --------------------------------------------------------
 el('acPick').onclick = () => {
@@ -574,8 +652,38 @@ function renderAircraft() {
   aircraft.standardMasses = aircraft.standardMasses || {};
   const smMap = { sm_adult: 'adult', sm_male: 'adultMale', sm_female: 'adultFemale', sm_child: 'child', sm_infant: 'infant', sm_stretcher: 'stretcher' };
   for (const [id, key] of Object.entries(smMap)) { el(id).value = aircraft.standardMasses[key] ?? ''; bindCfg(id, () => aircraft.standardMasses, key); }
-  renderCrewEditor(); renderPantryEditor();
 }
+function renderCargoEditor() {
+  const host = el('cargoEditor'); const cargo = aircraft.stations?.cargo || [];
+  const body = cargo.map((c, i) => `<tr>
+    <td><input data-i="${i}" data-k="label" value="${c.label ?? ''}" style="width:116px"></td>
+    <td><input type="number" step="0.001" data-i="${i}" data-k="arm" value="${c.arm}" style="width:80px"></td>
+    <td><input type="number" data-i="${i}" data-k="maxMass" value="${c.maxMass ?? 0}" style="width:66px"></td>
+    <td><button class="btn small ghost" data-del="${i}" style="color:var(--red)">✕</button></td></tr>`).join('');
+  host.innerHTML = `<table class="vtable"><thead><tr><th>Name</th><th>Arm (${armU()})</th><th>Max (${massU()})</th><th></th></tr></thead><tbody>${body}</tbody></table>
+    <button class="btn small" id="addCargo" style="margin-top:8px">+ Add hold</button>`;
+  host.querySelectorAll('input[data-i]').forEach((inp) => inp.oninput = () => { const c = aircraft.stations.cargo[+inp.dataset.i]; const k = inp.dataset.k; c[k] = k === 'label' ? inp.value : Number(inp.value); dispatchChanged(); });
+  host.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => { aircraft.stations.cargo.splice(+b.dataset.del, 1); renderCargoEditor(); dispatchChanged(); });
+  el('addCargo').onclick = () => {
+    aircraft.stations.cargo = aircraft.stations.cargo || [];
+    let n = aircraft.stations.cargo.length + 1, id = 'hold' + n; while (aircraft.stations.cargo.some((c) => c.id === id)) id = 'hold' + (++n);
+    aircraft.stations.cargo.push({ id, label: 'Hold ' + n, arm: 0, maxMass: 0 });
+    renderCargoEditor(); dispatchChanged();
+  };
+}
+function renderFleet() {
+  const host = el('fleetList'); host.innerHTML = '';
+  for (const a of fleet) {
+    const draftDirty = drafts[a.id] && JSON.stringify(drafts[a.id]) !== JSON.stringify(a);
+    const row = div('fleet-row' + (a.id === selected ? ' active' : ''));
+    row.innerHTML = `<div class="fl-main"><div class="fl-name">${a.name}</div><div class="fl-sub">${a.units?.mass || 'lb'}/${a.units?.arm || 'in'} · ${a.cabinRows ? 'section' : 'seat-map'}${draftDirty ? ' · <span style="color:var(--amber)">unsaved</span>' : ''}</div></div>`;
+    const sel = btn(a.id === selected ? 'Selected' : 'Select'); sel.className = 'btn small' + (a.id === selected ? ' ghost' : '');
+    sel.onclick = () => { if (a.id !== selected) switchAircraft(a.id); };
+    row.appendChild(sel);
+    host.appendChild(row);
+  }
+}
+el('addAircraftBtn').onclick = () => addAircraftFlow();
 function renderCrewEditor() {
   const host = el('crewEditor'); const crew = aircraft.stations?.crew || [];
   const body = crew.map((c, i) => `<tr>
@@ -795,20 +903,9 @@ function renderHistory() {
   }
 }
 function describeChange(c) {
-  const p = prettyPath(c.path);
-  if (c.kind === 'add') return `<div class="he-c">＋ ${p}</div>`;
-  if (c.kind === 'remove') return `<div class="he-c">－ ${p}</div>`;
-  if (c.kind === 'arr') return `<div class="he-c">~ ${p} updated</div>`;
-  return `<div class="he-c">${p}: <b>${fmtChange(c.from)}</b> → <b>${fmtChange(c.to)}</b></div>`;
+  if (c.label != null) return `<div class="he-c">${c.label}: <b>${fmtN(c.from)}</b> → <b>${fmtN(c.to)}</b>${c.unit ? ' ' + c.unit : ''}</div>`;
+  return `<div class="he-c">${c.desc}</div>`;
 }
-function prettyPath(path) {
-  return path
-    .replace(/^limits\./, 'Limit ').replace(/^index\./, 'Index ').replace(/^mac\./, 'MAC ')
-    .replace(/^standardMasses\./, 'Std mass ').replace(/^stations\.crew/, 'Crew').replace(/^stations\.pantry/, 'Pantry')
-    .replace(/^stations\.cargo/, 'Cargo').replace(/^envelopes\./, 'Env ').replace(/^tanks/, 'Tank').replace(/^cabinRows/, 'Row')
-    .replace(/\.(\d+)\b/g, '[$1]').replace(/^name$/, 'Name').replace(/^sectionArmMode$/, 'Section arm mode');
-}
-function fmtChange(v) { return typeof v === 'number' ? (+v.toFixed(3)) : (v == null ? '—' : String(v)); }
 el('saveDraft').onclick = () => commitDraft();
 el('discardDraft').onclick = () => { if (confirm('Discard all pending changes and revert to the saved aircraft?')) discardDraft(); };
 
