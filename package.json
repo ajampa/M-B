@@ -1,0 +1,12 @@
+{
+  "name": "mb-calculator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aircraft Mass & Balance calculator — local prototype",
+  "type": "module",
+  "scripts": {
+    "test": "node test/engine.test.mjs",
+    "render": "node test/render-svg.mjs envelope-preview.svg",
+    "serve": "python3 -m http.server -d web 8000"
+  }
+}

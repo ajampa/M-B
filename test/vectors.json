@@ -1,0 +1,49 @@
+{
+  "_note": "Hand-checked golden test vectors. The JS engine and the future Swift engine must both reproduce these. Conversions are exact; integration %MAC uses a 0.05 tolerance.",
+
+  "conversions": [
+    { "what": "armToPctMac(511.0)", "arm": 511.0, "expectPctMac": 24.80029 },
+    { "what": "armToPctMac(514.0 STA)", "arm": 514.0, "expectPctMac": 28.03862 },
+    { "what": "pctMacToArm(25)", "pctMac": 25.0, "expectArm": 511.185 },
+    { "what": "armToIndex(27000 @ 511)", "mass": 27000, "arm": 511.0, "expectIndex": 47.63636 }
+  ],
+
+  "interp": [
+    { "what": "TOL.fwd @ 38000 vertex", "phase": "TOL", "curve": "fwd", "mass": 38000, "expect": 20.0 },
+    { "what": "TOL.fwd @ 38750 midpoint", "phase": "TOL", "curve": "fwd", "mass": 38750, "expect": 18.0 },
+    { "what": "TOL.aft @ 45000", "phase": "TOL", "curve": "aft", "mass": 45000, "expect": 38.0 },
+    { "what": "TOL.fwd @ 45000", "phase": "TOL", "curve": "fwd", "mass": 45000, "expect": 24.125 }
+  ],
+
+  "envelope": [
+    { "what": "TOL inside @ (45000, 25)", "phase": "TOL", "mass": 45000, "pctMac": 25.0, "expectInside": true },
+    { "what": "TOL too-forward @ (45000, 15)", "phase": "TOL", "mass": 45000, "pctMac": 15.0, "expectInside": false },
+    { "what": "TOL too-aft @ (45000, 39)", "phase": "TOL", "mass": 45000, "pctMac": 39.0, "expectInside": false },
+    { "what": "TOL out-of-range mass @ (50000, 25)", "phase": "TOL", "mass": 50000, "pctMac": 25.0, "expectInside": false }
+  ],
+
+  "integration": {
+    "what": "Realistic in-envelope load on the sample jet",
+    "load": {
+      "basicMass": 27000,
+      "basicArm": 511.0,
+      "crew": [ { "mass": 200, "arm": 330.0 }, { "mass": 200, "arm": 330.0 } ],
+      "pantry": [ { "mass": 250, "arm": 360.0 }, { "mass": 180, "arm": 600.0 } ],
+      "pax": [
+        { "mass": 200, "arm": 525.0 }, { "mass": 200, "arm": 525.0 },
+        { "mass": 200, "arm": 560.0 }, { "mass": 200, "arm": 560.0 }
+      ],
+      "cargo": [ { "mass": 1000, "arm": 660.0 } ],
+      "fuel": { "taxi": 300, "trip": 6000, "contingency": 300, "alternate": 1500, "finalReserve": 1200, "extra": 0 }
+    },
+    "expect": {
+      "zfm": { "mass": 29630, "pctMac": 27.7175 },
+      "tom": { "mass": 38630, "pctMac": 29.1754 },
+      "ldm": { "mass": 32630, "pctMac": 28.0277 },
+      "ramp": { "mass": 38930 },
+      "fuel": { "ramp": 9300, "takeoff": 9000, "landing": 3000, "sufficient": true },
+      "allInside": true,
+      "ok": true
+    }
+  }
+}
