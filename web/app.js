@@ -4,9 +4,9 @@ import DEFAULT_AIRCRAFT from './default-aircraft.js';
 import ATR_AIRCRAFT from './atr-aircraft.js';
 
 const CATALOG = [DEFAULT_AIRCRAFT, ATR_AIRCRAFT]; // built-in aircraft the fleet seeds from
-const LS_FLEET = 'mb.fleet.v5';
-const LS_LOADS = 'mb.loads.v5';
-const LS_SEL = 'mb.selected.v5';
+const LS_FLEET = 'mb.fleet.v6';
+const LS_LOADS = 'mb.loads.v6';
+const LS_SEL = 'mb.selected.v6';
 
 let fleet = load(LS_FLEET) || CATALOG.map((a) => structuredClone(a));
 let loads = load(LS_LOADS) || {};
@@ -48,7 +48,7 @@ function freshLoad(ac) {
     crew: Object.fromEntries((ac.stations?.crew || []).map((c) => [c.id, c.mass ?? (ac.units?.mass === 'kg' ? 85 : 200)])),
     pantry: seed.pantry || (ac.stations?.pantry?.[0] ? { [ac.stations.pantry[0].id]: true } : {}),
     pax: seed.pax || {},
-    rows: seed.rows || {},
+    sections: seed.sections || {},
     cargo: seed.cargo || {},
     fuel: seed.fuel || { ramp: 0, taxi: 0, trip: 0 },
   };
@@ -64,11 +64,11 @@ function buildLoad() {
     .filter((p) => state.pantry[p.id]).map((p) => ({ mass: p.mass, arm: p.arm }));
   const pax = Object.entries(state.pax || {}).filter(([, t]) => t)
     .map(([id, t]) => ({ mass: stdMass[t], arm: seatArm(id) }));
-  // Section seating: each row carries a passenger count at the row arm.
+  // Section seating: a passenger count per section, loaded at the section arm.
   if (aircraft.cabinRows) {
-    for (const r of aircraft.cabinRows) {
-      const n = Number(state.rows?.[r.id]) || 0;
-      if (n > 0) pax.push({ mass: n * stdMass.adult, arm: r.arm });
+    for (const sec of cabinSections()) {
+      const n = Number(state.sections?.[sec.label]) || 0;
+      if (n > 0) pax.push({ mass: n * stdMass.adult, arm: sec.arm });
     }
   }
   const cargo = (aircraft.stations?.cargo || [])
@@ -76,6 +76,20 @@ function buildLoad() {
   return { basicMass: +state.basicMass, basicArm: +state.basicArm, crew, pantry, pax, cargo, fuel: state.fuel };
 }
 function seatArm(id) { return (aircraft.stations?.pax?.find((s) => s.id === id) || {}).arm; }
+// Group cabinRows into sections: capacity (sum), mean arm, first/last row label.
+function cabinSections() {
+  const map = {};
+  for (const r of aircraft.cabinRows || []) { const s = r.section ?? '—'; (map[s] = map[s] || []).push(r); }
+  return Object.keys(map).map((label) => {
+    const rs = map[label].slice().sort((a, b) => a.arm - b.arm);
+    return {
+      label, rows: rs,
+      capacity: rs.reduce((a, r) => a + (r.capacity ?? 4), 0),
+      arm: rs.reduce((a, r) => a + r.arm, 0) / rs.length,
+      firstRow: rs[0].label, lastRow: rs[rs.length - 1].label,
+    };
+  }).sort((a, b) => a.arm - b.arm);
+}
 function stdMassFor(t) { const sm = aircraft.standardMasses || {}; return { male: sm.adultMale, female: sm.adultFemale, child: sm.child, stretcher: sm.stretcher ?? 250, adult: sm.adult ?? sm.adultMale }[t]; }
 
 // ---- icons ------------------------------------------------------------------
@@ -218,7 +232,9 @@ function renderPaxBrush() {
 // Passengers: section loader (counts per row, grouped by section) for
 // section-seating aircraft, otherwise the tap-a-seat cabin map.
 function renderCabin() {
-  if (aircraft.cabinRows) return renderSectionCabin();
+  const hint = el('paxHint');
+  if (aircraft.cabinRows) { if (hint) hint.textContent = 'Tap a section to add passengers.'; return renderSectionCabin(); }
+  if (hint) hint.textContent = 'Pick a category above, then tap seats to fill them. Tapping a filled seat clears it.';
   const host = el('cabin'); host.innerHTML = '';
   const seats = aircraft.stations?.pax || [];
   if (!seats.length) { host.innerHTML = '<p class="hint">No seats. Add them in Dispatch &rsaquo; Cabin Seats.</p>'; el('paxCount').textContent = '0 pax'; return; }
@@ -246,30 +262,56 @@ function renderCabin() {
   }
   el('paxCount').textContent = `${Object.values(state.pax).filter(Boolean).length} occupied`;
 }
-// Section-seating cabin: a passenger count per row, grouped by section.
+// Section-seating cabin: one tap-target tile per section. Tapping opens a quick
+// editor (− N + / Fill / Clear). Each tile shows occupied/capacity and rows.
 function renderSectionCabin() {
   const host = el('cabin'); host.innerHTML = '';
-  state.rows = state.rows || {};
-  const bySec = {};
-  for (const r of aircraft.cabinRows) (bySec[r.section ?? '—'] = bySec[r.section ?? '—'] || []).push(r);
+  state.sections = state.sections || {};
+  const wrap = div('section-cabin');
   let total = 0;
-  for (const sec of Object.keys(bySec)) {
-    const block = div('section-block');
-    const head = div('section-head');
-    block.appendChild(head);
-    let secTotal = 0;
-    for (const r of bySec[sec]) {
-      const n = Number(state.rows[r.id]) || 0; secTotal += n;
-      const row = div('row');
-      row.innerHTML = `<label>Row ${r.label} · arm ${r.arm} ${armU()}</label>`;
-      row.appendChild(stepper(n, 1, (v) => { state.rows[r.id] = v; recompute(); save(); renderSectionCabin(); }, r.capacity ?? 4));
-      block.appendChild(row);
-    }
-    total += secTotal;
-    head.innerHTML = `<span>Section ${sec}</span><span class="pill blue flat">${secTotal} pax</span>`;
-    host.appendChild(block);
+  for (const sec of cabinSections()) {
+    const cnt = Math.min(Number(state.sections[sec.label]) || 0, sec.capacity);
+    total += cnt;
+    const tile = div('section-tile' + (cnt > 0 ? ' filled' : ''));
+    tile.innerHTML =
+      `<div class="st-main"><div class="st-label">${sec.label}</div><div class="st-count">${cnt}/${sec.capacity}</div></div>
+       <div class="st-rows">${sec.firstRow}<span>↓</span>${sec.lastRow}</div>`;
+    tile.onclick = () => openSectionEditor(tile, sec);
+    wrap.appendChild(tile);
   }
+  host.appendChild(wrap);
   el('paxCount').textContent = `${total} pax`;
+}
+function openSectionEditor(tile, sec) {
+  closePopup();
+  const menu = div('popup-menu section-pop'); _popup = menu;
+  menu.onmousedown = (e) => e.stopPropagation();
+  const set = (v) => {
+    v = Math.max(0, Math.min(sec.capacity, Math.round(v)));
+    state.sections[sec.label] = v;
+    countEl.textContent = v + ' / ' + sec.capacity;
+    tile.classList.toggle('filled', v > 0);
+    tile.querySelector('.st-count').textContent = v + '/' + sec.capacity;
+    recompute(); save();
+  };
+  const title = div('sp-title'); title.textContent = `Section ${sec.label} · rows ${sec.firstRow}–${sec.lastRow}`;
+  const row = div('sp-row');
+  const minus = btn('−'); minus.className = 'sp-btn';
+  const plus = btn('+'); plus.className = 'sp-btn';
+  const countEl = div('sp-count'); countEl.textContent = (Number(state.sections[sec.label]) || 0) + ' / ' + sec.capacity;
+  minus.onclick = (e) => { e.preventDefault(); set((Number(state.sections[sec.label]) || 0) - 1); };
+  plus.onclick = (e) => { e.preventDefault(); set((Number(state.sections[sec.label]) || 0) + 1); };
+  row.append(minus, countEl, plus);
+  const quick = div('sp-quick');
+  const fill = btn('Fill'); fill.className = 'btn small'; fill.onclick = (e) => { e.preventDefault(); set(sec.capacity); };
+  const clr = btn('Clear'); clr.className = 'btn small ghost'; clr.onclick = (e) => { e.preventDefault(); set(0); };
+  quick.append(fill, clr);
+  menu.append(title, row, quick);
+  document.body.appendChild(menu);
+  const r = tile.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+  menu.style.top = (r.bottom + 6) + 'px';
+  setTimeout(() => document.addEventListener('mousedown', closePopup, { once: true }), 0);
 }
 function stretcherEl(s) {
   const occ = state.pax[s.id] === 'stretcher';
@@ -319,7 +361,7 @@ function renderFuel() {
 function recompute() {
   const r = computeLoadsheet(aircraft, buildLoad());
   renderSummary(r); renderFuelDerived(r);
-  el('chart').innerHTML = renderEnvelopeSVG(aircraft, r, { width: 372, height: 320 });
+  el('chart').innerHTML = renderEnvelopeSVG(aircraft, r, { width: 430, height: 560 });
   renderVerdict(r);
   el('overallBadge').innerHTML = pill(r.ok ? 'good' : 'bad', r.ok ? 'Within limits' : 'Check limits');
   el('loadsheetTime').innerHTML = `<span class="pill blue flat">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;

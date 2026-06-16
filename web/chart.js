@@ -12,20 +12,34 @@ const PHASE_STYLE = {
 
 export function renderEnvelopeSVG(aircraft, result, opts = {}) {
   const W = opts.width || 460;
-  const H = opts.height || 380;
-  const m = { top: 22, right: 16, bottom: 42, left: 52 };
+  const H = opts.height || 560;
+  const m = { top: 24, right: 18, bottom: 46, left: 58 };
   const iw = W - m.left - m.right;
   const ih = H - m.top - m.bottom;
+  const massU = aircraft.units?.mass || 'lb';
 
   const allPts = ['TOL', 'FLT'].flatMap((k) => [...aircraft.envelopes[k].fwd, ...aircraft.envelopes[k].aft]);
   const xs = allPts.map((p) => p[1]);
   const ys = allPts.map((p) => p[0]);
-  const xMin = Math.min(...xs) - 2.5;
-  const xMax = Math.max(...xs) + 2.5;
-  const yMin = Math.min(...ys) - 1500;
-  const yMax = Math.max(...ys) + 1500;
+  const xPad = (Math.max(...xs) - Math.min(...xs)) * 0.08 + 1;
+  const yPad = (Math.max(...ys) - Math.min(...ys)) * 0.06 + 200;
+  const xMin = Math.min(...xs) - xPad;
+  const xMax = Math.max(...xs) + xPad;
+  const yMin = Math.min(...ys) - yPad;
+  const yMax = Math.max(...ys) + yPad;
   const sx = (pct) => m.left + ((pct - xMin) / (xMax - xMin)) * iw;
   const sy = (mass) => m.top + ih - ((mass - yMin) / (yMax - yMin)) * ih;
+
+  // "Nice" 1/2/5 tick step for a range and target tick count.
+  const niceStep = (range, target) => {
+    const raw = range / Math.max(1, target);
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const n = raw / mag;
+    return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * mag;
+  };
+  const xStep = niceStep(xMax - xMin, 7);
+  const yStep = niceStep(yMax - yMin, 8);
+  const fmtMass = (v) => (Math.abs(v) >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + 'k' : '' + Math.round(v));
 
   const p = [];
   p.push(`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,SF Pro Text,Segoe UI,Roboto,sans-serif">`);
@@ -39,21 +53,28 @@ export function renderEnvelopeSVG(aircraft, result, opts = {}) {
       <path d="M1 1L11 6L1 11L3.4 6z" fill="#b06a00"/></marker>
   </defs>`);
   p.push(`<rect x="0" y="0" width="${W}" height="${H}" rx="12" fill="#fbfcfe"/>`);
-  p.push(`<rect x="${m.left}" y="${m.top}" width="${iw}" height="${ih}" fill="#ffffff" stroke="#eef1f6"/>`);
+  p.push(`<rect x="${m.left}" y="${m.top}" width="${iw}" height="${ih}" fill="#ffffff" stroke="#dfe4ec"/>`);
 
-  // Gridlines + ticks.
-  for (let pct = Math.ceil(xMin / 5) * 5; pct <= xMax; pct += 5) {
+  // Minor graph-paper gridlines (5 subdivisions per major), then major lines + ticks.
+  const xMinor = xStep / 5, yMinor = yStep / 5;
+  for (let x = Math.ceil(xMin / xMinor) * xMinor; x <= xMax; x += xMinor) {
+    p.push(`<line x1="${sx(x).toFixed(1)}" y1="${m.top}" x2="${sx(x).toFixed(1)}" y2="${m.top + ih}" stroke="#f4f6fa"/>`);
+  }
+  for (let y = Math.ceil(yMin / yMinor) * yMinor; y <= yMax; y += yMinor) {
+    p.push(`<line x1="${m.left}" y1="${sy(y).toFixed(1)}" x2="${m.left + iw}" y2="${sy(y).toFixed(1)}" stroke="#f4f6fa"/>`);
+  }
+  for (let pct = Math.ceil(xMin / xStep) * xStep; pct <= xMax; pct += xStep) {
     const x = sx(pct);
-    p.push(`<line x1="${x}" y1="${m.top}" x2="${x}" y2="${m.top + ih}" stroke="#f1f4f9"/>`);
-    p.push(`<text x="${x}" y="${m.top + ih + 16}" font-size="10.5" fill="#8a94a6" text-anchor="middle">${pct}</text>`);
+    p.push(`<line x1="${x.toFixed(1)}" y1="${m.top}" x2="${x.toFixed(1)}" y2="${m.top + ih}" stroke="#e4e8ef"/>`);
+    p.push(`<text x="${x.toFixed(1)}" y="${m.top + ih + 17}" font-size="11" fill="#8a94a6" text-anchor="middle">${(+pct.toFixed(2))}</text>`);
   }
-  for (let mass = Math.ceil(yMin / 4000) * 4000; mass <= yMax; mass += 4000) {
+  for (let mass = Math.ceil(yMin / yStep) * yStep; mass <= yMax; mass += yStep) {
     const y = sy(mass);
-    p.push(`<line x1="${m.left}" y1="${y}" x2="${m.left + iw}" y2="${y}" stroke="#f1f4f9"/>`);
-    p.push(`<text x="${m.left - 7}" y="${y + 3.5}" font-size="10.5" fill="#8a94a6" text-anchor="end">${mass / 1000}k</text>`);
+    p.push(`<line x1="${m.left}" y1="${y.toFixed(1)}" x2="${m.left + iw}" y2="${y.toFixed(1)}" stroke="#e4e8ef"/>`);
+    p.push(`<text x="${m.left - 8}" y="${(y + 3.5).toFixed(1)}" font-size="11" fill="#8a94a6" text-anchor="end">${fmtMass(mass)}</text>`);
   }
-  p.push(`<text x="${m.left + iw / 2}" y="${H - 6}" font-size="11" fill="#5b6573" text-anchor="middle" font-weight="600">CG · % MAC</text>`);
-  p.push(`<text transform="translate(13 ${m.top + ih / 2}) rotate(-90)" font-size="11" fill="#5b6573" text-anchor="middle" font-weight="600">Mass · lb</text>`);
+  p.push(`<text x="${m.left + iw / 2}" y="${H - 7}" font-size="12" fill="#5b6573" text-anchor="middle" font-weight="600">CG · % MAC</text>`);
+  p.push(`<text transform="translate(15 ${m.top + ih / 2}) rotate(-90)" font-size="12" fill="#5b6573" text-anchor="middle" font-weight="600">Mass · ${massU}</text>`);
 
   const ring = (env) => envelopePolygon(env).map(([pct, mass]) => `${sx(pct).toFixed(1)},${sy(mass).toFixed(1)}`).join(' ');
   // In-flight envelope (dashed, behind).

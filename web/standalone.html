@@ -90,7 +90,7 @@ button { font-family: inherit; }
 /* Body grid */
 .app-body {
   display: grid;
-  grid-template-columns: 232px 1fr 408px;
+  grid-template-columns: 220px 1fr 470px;
   grid-template-areas: "nav content side";
   gap: 18px; padding: 18px; align-items: start; flex: 1;
 }
@@ -239,6 +239,35 @@ input.wide { width: 100%; text-align: left; }
 .section-block { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
 .section-head { display: flex; align-items: center; justify-content: space-between; background: var(--panel-2); padding: 9px 14px; font-weight: 700; font-size: 13px; letter-spacing: .02em; }
 .section-block .row { padding: 9px 14px; border-top: 1px solid var(--line); margin: 0; }
+
+/* section seating — pilot quick-select tiles */
+.section-cabin { display: flex; flex-direction: column; gap: 12px; }
+.section-tile {
+  display: flex; align-items: stretch; justify-content: space-between; gap: 14px;
+  border: 1.5px solid var(--line-strong); border-radius: 16px; background: #fff; padding: 16px 18px;
+  cursor: pointer; box-shadow: inset 0 -3px 0 rgba(16,24,40,.05); min-height: 88px;
+}
+.section-tile:active { transform: scale(.99); }
+.section-tile.filled { background: #cfe9e2; border-color: #2f9e8a; }
+.section-tile .st-main { display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.st-label { font-size: 24px; font-weight: 750; line-height: 1; }
+.st-count { font-size: 15px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.section-tile.filled .st-count { color: #155c4f; font-weight: 600; }
+.st-rows {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 1px solid var(--line-strong); border-radius: 9px; padding: 6px 10px; min-width: 40px;
+  font-size: 14px; font-weight: 700; color: var(--ink-2); background: var(--panel-2);
+}
+.section-tile.filled .st-rows { background: rgba(255,255,255,.55); border-color: #4fae9d; }
+.st-rows span { color: var(--muted); font-size: 12px; font-weight: 600; }
+
+.section-pop { min-width: 210px; padding: 12px 14px; }
+.sp-title { font-size: 11px; color: var(--muted); font-weight: 700; margin-bottom: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.sp-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sp-btn { width: 48px; height: 48px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--panel-2); font-size: 26px; color: var(--blue); cursor: pointer; }
+.sp-btn:active { background: rgba(31,111,235,.12); }
+.sp-count { font-size: 22px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.sp-quick { display: flex; gap: 8px; margin-top: 12px; }
 .seat .kg { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .seat .sid { position: absolute; }
 .seat.male { background: #e6edf5; border-color: #aebfd4; }
@@ -251,7 +280,7 @@ input.wide { width: 100%; text-align: left; }
 
 /* Loadsheet (right panel) */
 .loadsheet table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-.loadsheet th, .loadsheet td { padding: 9px 6px; font-size: 13.5px; border-bottom: 1px solid var(--line); text-align: right; }
+.loadsheet th, .loadsheet td { padding: 12px 8px; font-size: 15px; border-bottom: 1px solid var(--line); text-align: right; }
 .loadsheet th:first-child, .loadsheet td:first-child { text-align: left; }
 .loadsheet thead th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
 .loadsheet td.phase { font-weight: 700; }
@@ -350,7 +379,7 @@ textarea { width: 100%; min-height: 88px; border: 1px solid var(--line-strong); 
           <div class="card-head"><h2>Passengers</h2><div class="right"><span class="pill blue flat" id="paxCount">0 pax</span></div></div>
           <div class="seg" id="paxBrush" style="margin-bottom:14px"></div>
           <div class="cabin" id="cabin"></div>
-          <p class="hint">Pick a category above, then tap seats to fill them. Tapping a filled seat clears it.</p>
+          <p class="hint" id="paxHint">Pick a category above, then tap seats to fill them. Tapping a filled seat clears it.</p>
         </div>
       </section>
 
@@ -1035,7 +1064,7 @@ const ATR_AIRCRAFT = {
 
   "seedLoad": {
     "flightNo": "EIN-72", "route": "EIDW→EGLC",
-    "rows": { "r10": 4, "r11": 4, "r12": 4, "r13": 4, "r14": 4, "r15": 2 },
+    "sections": { "A": 0, "B": 14, "C": 10 },
     "fuel": { "ramp": 2500, "taxi": 40, "trip": 1500 }
   }
 }
@@ -1057,20 +1086,34 @@ const PHASE_STYLE = {
 
 function renderEnvelopeSVG(aircraft, result, opts = {}) {
   const W = opts.width || 460;
-  const H = opts.height || 380;
-  const m = { top: 22, right: 16, bottom: 42, left: 52 };
+  const H = opts.height || 560;
+  const m = { top: 24, right: 18, bottom: 46, left: 58 };
   const iw = W - m.left - m.right;
   const ih = H - m.top - m.bottom;
+  const massU = aircraft.units?.mass || 'lb';
 
   const allPts = ['TOL', 'FLT'].flatMap((k) => [...aircraft.envelopes[k].fwd, ...aircraft.envelopes[k].aft]);
   const xs = allPts.map((p) => p[1]);
   const ys = allPts.map((p) => p[0]);
-  const xMin = Math.min(...xs) - 2.5;
-  const xMax = Math.max(...xs) + 2.5;
-  const yMin = Math.min(...ys) - 1500;
-  const yMax = Math.max(...ys) + 1500;
+  const xPad = (Math.max(...xs) - Math.min(...xs)) * 0.08 + 1;
+  const yPad = (Math.max(...ys) - Math.min(...ys)) * 0.06 + 200;
+  const xMin = Math.min(...xs) - xPad;
+  const xMax = Math.max(...xs) + xPad;
+  const yMin = Math.min(...ys) - yPad;
+  const yMax = Math.max(...ys) + yPad;
   const sx = (pct) => m.left + ((pct - xMin) / (xMax - xMin)) * iw;
   const sy = (mass) => m.top + ih - ((mass - yMin) / (yMax - yMin)) * ih;
+
+  // "Nice" 1/2/5 tick step for a range and target tick count.
+  const niceStep = (range, target) => {
+    const raw = range / Math.max(1, target);
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const n = raw / mag;
+    return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * mag;
+  };
+  const xStep = niceStep(xMax - xMin, 7);
+  const yStep = niceStep(yMax - yMin, 8);
+  const fmtMass = (v) => (Math.abs(v) >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + 'k' : '' + Math.round(v));
 
   const p = [];
   p.push(`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,SF Pro Text,Segoe UI,Roboto,sans-serif">`);
@@ -1084,21 +1127,28 @@ function renderEnvelopeSVG(aircraft, result, opts = {}) {
       <path d="M1 1L11 6L1 11L3.4 6z" fill="#b06a00"/></marker>
   </defs>`);
   p.push(`<rect x="0" y="0" width="${W}" height="${H}" rx="12" fill="#fbfcfe"/>`);
-  p.push(`<rect x="${m.left}" y="${m.top}" width="${iw}" height="${ih}" fill="#ffffff" stroke="#eef1f6"/>`);
+  p.push(`<rect x="${m.left}" y="${m.top}" width="${iw}" height="${ih}" fill="#ffffff" stroke="#dfe4ec"/>`);
 
-  // Gridlines + ticks.
-  for (let pct = Math.ceil(xMin / 5) * 5; pct <= xMax; pct += 5) {
+  // Minor graph-paper gridlines (5 subdivisions per major), then major lines + ticks.
+  const xMinor = xStep / 5, yMinor = yStep / 5;
+  for (let x = Math.ceil(xMin / xMinor) * xMinor; x <= xMax; x += xMinor) {
+    p.push(`<line x1="${sx(x).toFixed(1)}" y1="${m.top}" x2="${sx(x).toFixed(1)}" y2="${m.top + ih}" stroke="#f4f6fa"/>`);
+  }
+  for (let y = Math.ceil(yMin / yMinor) * yMinor; y <= yMax; y += yMinor) {
+    p.push(`<line x1="${m.left}" y1="${sy(y).toFixed(1)}" x2="${m.left + iw}" y2="${sy(y).toFixed(1)}" stroke="#f4f6fa"/>`);
+  }
+  for (let pct = Math.ceil(xMin / xStep) * xStep; pct <= xMax; pct += xStep) {
     const x = sx(pct);
-    p.push(`<line x1="${x}" y1="${m.top}" x2="${x}" y2="${m.top + ih}" stroke="#f1f4f9"/>`);
-    p.push(`<text x="${x}" y="${m.top + ih + 16}" font-size="10.5" fill="#8a94a6" text-anchor="middle">${pct}</text>`);
+    p.push(`<line x1="${x.toFixed(1)}" y1="${m.top}" x2="${x.toFixed(1)}" y2="${m.top + ih}" stroke="#e4e8ef"/>`);
+    p.push(`<text x="${x.toFixed(1)}" y="${m.top + ih + 17}" font-size="11" fill="#8a94a6" text-anchor="middle">${(+pct.toFixed(2))}</text>`);
   }
-  for (let mass = Math.ceil(yMin / 4000) * 4000; mass <= yMax; mass += 4000) {
+  for (let mass = Math.ceil(yMin / yStep) * yStep; mass <= yMax; mass += yStep) {
     const y = sy(mass);
-    p.push(`<line x1="${m.left}" y1="${y}" x2="${m.left + iw}" y2="${y}" stroke="#f1f4f9"/>`);
-    p.push(`<text x="${m.left - 7}" y="${y + 3.5}" font-size="10.5" fill="#8a94a6" text-anchor="end">${mass / 1000}k</text>`);
+    p.push(`<line x1="${m.left}" y1="${y.toFixed(1)}" x2="${m.left + iw}" y2="${y.toFixed(1)}" stroke="#e4e8ef"/>`);
+    p.push(`<text x="${m.left - 8}" y="${(y + 3.5).toFixed(1)}" font-size="11" fill="#8a94a6" text-anchor="end">${fmtMass(mass)}</text>`);
   }
-  p.push(`<text x="${m.left + iw / 2}" y="${H - 6}" font-size="11" fill="#5b6573" text-anchor="middle" font-weight="600">CG · % MAC</text>`);
-  p.push(`<text transform="translate(13 ${m.top + ih / 2}) rotate(-90)" font-size="11" fill="#5b6573" text-anchor="middle" font-weight="600">Mass · lb</text>`);
+  p.push(`<text x="${m.left + iw / 2}" y="${H - 7}" font-size="12" fill="#5b6573" text-anchor="middle" font-weight="600">CG · % MAC</text>`);
+  p.push(`<text transform="translate(15 ${m.top + ih / 2}) rotate(-90)" font-size="12" fill="#5b6573" text-anchor="middle" font-weight="600">Mass · ${massU}</text>`);
 
   const ring = (env) => envelopePolygon(env).map(([pct, mass]) => `${sx(pct).toFixed(1)},${sy(mass).toFixed(1)}`).join(' ');
   // In-flight envelope (dashed, behind).
@@ -1167,9 +1217,9 @@ function renderEnvelopeSVG(aircraft, result, opts = {}) {
 
 
 const CATALOG = [DEFAULT_AIRCRAFT, ATR_AIRCRAFT]; // built-in aircraft the fleet seeds from
-const LS_FLEET = 'mb.fleet.v5';
-const LS_LOADS = 'mb.loads.v5';
-const LS_SEL = 'mb.selected.v5';
+const LS_FLEET = 'mb.fleet.v6';
+const LS_LOADS = 'mb.loads.v6';
+const LS_SEL = 'mb.selected.v6';
 
 let fleet = load(LS_FLEET) || CATALOG.map((a) => structuredClone(a));
 let loads = load(LS_LOADS) || {};
@@ -1211,7 +1261,7 @@ function freshLoad(ac) {
     crew: Object.fromEntries((ac.stations?.crew || []).map((c) => [c.id, c.mass ?? (ac.units?.mass === 'kg' ? 85 : 200)])),
     pantry: seed.pantry || (ac.stations?.pantry?.[0] ? { [ac.stations.pantry[0].id]: true } : {}),
     pax: seed.pax || {},
-    rows: seed.rows || {},
+    sections: seed.sections || {},
     cargo: seed.cargo || {},
     fuel: seed.fuel || { ramp: 0, taxi: 0, trip: 0 },
   };
@@ -1227,11 +1277,11 @@ function buildLoad() {
     .filter((p) => state.pantry[p.id]).map((p) => ({ mass: p.mass, arm: p.arm }));
   const pax = Object.entries(state.pax || {}).filter(([, t]) => t)
     .map(([id, t]) => ({ mass: stdMass[t], arm: seatArm(id) }));
-  // Section seating: each row carries a passenger count at the row arm.
+  // Section seating: a passenger count per section, loaded at the section arm.
   if (aircraft.cabinRows) {
-    for (const r of aircraft.cabinRows) {
-      const n = Number(state.rows?.[r.id]) || 0;
-      if (n > 0) pax.push({ mass: n * stdMass.adult, arm: r.arm });
+    for (const sec of cabinSections()) {
+      const n = Number(state.sections?.[sec.label]) || 0;
+      if (n > 0) pax.push({ mass: n * stdMass.adult, arm: sec.arm });
     }
   }
   const cargo = (aircraft.stations?.cargo || [])
@@ -1239,6 +1289,20 @@ function buildLoad() {
   return { basicMass: +state.basicMass, basicArm: +state.basicArm, crew, pantry, pax, cargo, fuel: state.fuel };
 }
 function seatArm(id) { return (aircraft.stations?.pax?.find((s) => s.id === id) || {}).arm; }
+// Group cabinRows into sections: capacity (sum), mean arm, first/last row label.
+function cabinSections() {
+  const map = {};
+  for (const r of aircraft.cabinRows || []) { const s = r.section ?? '—'; (map[s] = map[s] || []).push(r); }
+  return Object.keys(map).map((label) => {
+    const rs = map[label].slice().sort((a, b) => a.arm - b.arm);
+    return {
+      label, rows: rs,
+      capacity: rs.reduce((a, r) => a + (r.capacity ?? 4), 0),
+      arm: rs.reduce((a, r) => a + r.arm, 0) / rs.length,
+      firstRow: rs[0].label, lastRow: rs[rs.length - 1].label,
+    };
+  }).sort((a, b) => a.arm - b.arm);
+}
 function stdMassFor(t) { const sm = aircraft.standardMasses || {}; return { male: sm.adultMale, female: sm.adultFemale, child: sm.child, stretcher: sm.stretcher ?? 250, adult: sm.adult ?? sm.adultMale }[t]; }
 
 // ---- icons ------------------------------------------------------------------
@@ -1381,7 +1445,9 @@ function renderPaxBrush() {
 // Passengers: section loader (counts per row, grouped by section) for
 // section-seating aircraft, otherwise the tap-a-seat cabin map.
 function renderCabin() {
-  if (aircraft.cabinRows) return renderSectionCabin();
+  const hint = el('paxHint');
+  if (aircraft.cabinRows) { if (hint) hint.textContent = 'Tap a section to add passengers.'; return renderSectionCabin(); }
+  if (hint) hint.textContent = 'Pick a category above, then tap seats to fill them. Tapping a filled seat clears it.';
   const host = el('cabin'); host.innerHTML = '';
   const seats = aircraft.stations?.pax || [];
   if (!seats.length) { host.innerHTML = '<p class="hint">No seats. Add them in Dispatch &rsaquo; Cabin Seats.</p>'; el('paxCount').textContent = '0 pax'; return; }
@@ -1409,30 +1475,56 @@ function renderCabin() {
   }
   el('paxCount').textContent = `${Object.values(state.pax).filter(Boolean).length} occupied`;
 }
-// Section-seating cabin: a passenger count per row, grouped by section.
+// Section-seating cabin: one tap-target tile per section. Tapping opens a quick
+// editor (− N + / Fill / Clear). Each tile shows occupied/capacity and rows.
 function renderSectionCabin() {
   const host = el('cabin'); host.innerHTML = '';
-  state.rows = state.rows || {};
-  const bySec = {};
-  for (const r of aircraft.cabinRows) (bySec[r.section ?? '—'] = bySec[r.section ?? '—'] || []).push(r);
+  state.sections = state.sections || {};
+  const wrap = div('section-cabin');
   let total = 0;
-  for (const sec of Object.keys(bySec)) {
-    const block = div('section-block');
-    const head = div('section-head');
-    block.appendChild(head);
-    let secTotal = 0;
-    for (const r of bySec[sec]) {
-      const n = Number(state.rows[r.id]) || 0; secTotal += n;
-      const row = div('row');
-      row.innerHTML = `<label>Row ${r.label} · arm ${r.arm} ${armU()}</label>`;
-      row.appendChild(stepper(n, 1, (v) => { state.rows[r.id] = v; recompute(); save(); renderSectionCabin(); }, r.capacity ?? 4));
-      block.appendChild(row);
-    }
-    total += secTotal;
-    head.innerHTML = `<span>Section ${sec}</span><span class="pill blue flat">${secTotal} pax</span>`;
-    host.appendChild(block);
+  for (const sec of cabinSections()) {
+    const cnt = Math.min(Number(state.sections[sec.label]) || 0, sec.capacity);
+    total += cnt;
+    const tile = div('section-tile' + (cnt > 0 ? ' filled' : ''));
+    tile.innerHTML =
+      `<div class="st-main"><div class="st-label">${sec.label}</div><div class="st-count">${cnt}/${sec.capacity}</div></div>
+       <div class="st-rows">${sec.firstRow}<span>↓</span>${sec.lastRow}</div>`;
+    tile.onclick = () => openSectionEditor(tile, sec);
+    wrap.appendChild(tile);
   }
+  host.appendChild(wrap);
   el('paxCount').textContent = `${total} pax`;
+}
+function openSectionEditor(tile, sec) {
+  closePopup();
+  const menu = div('popup-menu section-pop'); _popup = menu;
+  menu.onmousedown = (e) => e.stopPropagation();
+  const set = (v) => {
+    v = Math.max(0, Math.min(sec.capacity, Math.round(v)));
+    state.sections[sec.label] = v;
+    countEl.textContent = v + ' / ' + sec.capacity;
+    tile.classList.toggle('filled', v > 0);
+    tile.querySelector('.st-count').textContent = v + '/' + sec.capacity;
+    recompute(); save();
+  };
+  const title = div('sp-title'); title.textContent = `Section ${sec.label} · rows ${sec.firstRow}–${sec.lastRow}`;
+  const row = div('sp-row');
+  const minus = btn('−'); minus.className = 'sp-btn';
+  const plus = btn('+'); plus.className = 'sp-btn';
+  const countEl = div('sp-count'); countEl.textContent = (Number(state.sections[sec.label]) || 0) + ' / ' + sec.capacity;
+  minus.onclick = (e) => { e.preventDefault(); set((Number(state.sections[sec.label]) || 0) - 1); };
+  plus.onclick = (e) => { e.preventDefault(); set((Number(state.sections[sec.label]) || 0) + 1); };
+  row.append(minus, countEl, plus);
+  const quick = div('sp-quick');
+  const fill = btn('Fill'); fill.className = 'btn small'; fill.onclick = (e) => { e.preventDefault(); set(sec.capacity); };
+  const clr = btn('Clear'); clr.className = 'btn small ghost'; clr.onclick = (e) => { e.preventDefault(); set(0); };
+  quick.append(fill, clr);
+  menu.append(title, row, quick);
+  document.body.appendChild(menu);
+  const r = tile.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+  menu.style.top = (r.bottom + 6) + 'px';
+  setTimeout(() => document.addEventListener('mousedown', closePopup, { once: true }), 0);
 }
 function stretcherEl(s) {
   const occ = state.pax[s.id] === 'stretcher';
@@ -1482,7 +1574,7 @@ function renderFuel() {
 function recompute() {
   const r = computeLoadsheet(aircraft, buildLoad());
   renderSummary(r); renderFuelDerived(r);
-  el('chart').innerHTML = renderEnvelopeSVG(aircraft, r, { width: 372, height: 320 });
+  el('chart').innerHTML = renderEnvelopeSVG(aircraft, r, { width: 430, height: 560 });
   renderVerdict(r);
   el('overallBadge').innerHTML = pill(r.ok ? 'good' : 'bad', r.ok ? 'Within limits' : 'Check limits');
   el('loadsheetTime').innerHTML = `<span class="pill blue flat">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
