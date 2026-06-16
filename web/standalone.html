@@ -201,6 +201,29 @@ input.wide { width: 100%; text-align: left; }
 .seat.face-left::after { top: 16px; bottom: 16px; right: 3px; width: 4px; }
 .seat.face-right::after { top: 16px; bottom: 16px; left: 3px; width: 4px; }
 .seat.empty::after { background: rgba(21,41,63,.14); }
+
+/* stretcher / berth — a long position with a settable length */
+.stretcher {
+  width: 100%; border: 1.5px solid var(--line-strong); border-radius: 10px; background: #fff;
+  display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; margin: 4px 0;
+  cursor: pointer; box-shadow: inset 0 -3px 0 rgba(16,24,40,.05);
+}
+.stretcher:active { transform: scale(.99); }
+.stretcher.occupied { background: #e9eef4; border-color: var(--navy); }
+.stretcher .lbl { font-weight: 700; font-size: 13px; letter-spacing: .03em; }
+.stretcher .meta { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* popup menu */
+.popup-menu {
+  position: fixed; z-index: 200; background: #fff; border: 1px solid var(--line-strong);
+  border-radius: 10px; box-shadow: var(--shadow-lg); padding: 4px; min-width: 132px;
+}
+.popup-item {
+  display: block; width: 100%; text-align: left; border: none; background: transparent;
+  padding: 9px 12px; border-radius: 7px; font-size: 14px; cursor: pointer; color: var(--ink);
+}
+.popup-item:hover { background: var(--panel-2); }
+.popup-item.on { color: var(--blue); font-weight: 700; }
 .seat .kg { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .seat .sid { position: absolute; }
 .seat.male { background: #e6edf5; border-color: #aebfd4; }
@@ -877,7 +900,7 @@ const DEFAULT_AIRCRAFT = {
     ]
   },
 
-  "standardMasses": { "adultMale": 200, "adultFemale": 165, "child": 75, "infant": 22 },
+  "standardMasses": { "adultMale": 200, "adultFemale": 165, "child": 75, "infant": 22, "stretcher": 250 },
 
   "tanks": [
     {
@@ -1035,7 +1058,7 @@ function freshLoad() {
 // ---- engine input -----------------------------------------------------------
 function buildLoad() {
   const sm = aircraft.standardMasses || {};
-  const stdMass = { male: sm.adultMale ?? 200, female: sm.adultFemale ?? 165, child: sm.child ?? 75 };
+  const stdMass = { male: sm.adultMale ?? 200, female: sm.adultFemale ?? 165, child: sm.child ?? 75, stretcher: sm.stretcher ?? 250 };
   const crew = (aircraft.stations.crew || [])
     .map((c) => ({ mass: Number(state.crew[c.id]) || 0, arm: c.arm })).filter((x) => x.mass > 0);
   const pantry = (aircraft.stations.pantry || [])
@@ -1047,7 +1070,7 @@ function buildLoad() {
   return { basicMass: +state.basicMass, basicArm: +state.basicArm, crew, pantry, pax, cargo, fuel: state.fuel };
 }
 function seatArm(id) { return (aircraft.stations.pax.find((s) => s.id === id) || {}).arm; }
-function stdMassFor(t) { const sm = aircraft.standardMasses || {}; return { male: sm.adultMale, female: sm.adultFemale, child: sm.child }[t]; }
+function stdMassFor(t) { const sm = aircraft.standardMasses || {}; return { male: sm.adultMale, female: sm.adultFemale, child: sm.child, stretcher: sm.stretcher ?? 250 }[t]; }
 
 // ---- icons ------------------------------------------------------------------
 const I = {
@@ -1152,20 +1175,38 @@ function renderCabin() {
   for (const s of seats) { const r = s.row ?? 0; (rows[r] = rows[r] || []).push(s); }
   const meanArm = (arr) => arr.reduce((a, s) => a + s.arm, 0) / arr.length;
   const order = Object.keys(rows).sort((a, b) => meanArm(rows[a]) - meanArm(rows[b]));
-  const maxRail = Math.max(2, ...seats.map((s) => s.rail || 1));
+  const normalSeats = seats.filter((s) => s.type !== 'stretcher');
+  const maxRail = Math.max(2, ...normalSeats.map((s) => s.rail || 1));
   const aisleAfter = Math.floor(maxRail / 2);
   for (const r of order) {
     const seatsR = rows[r];
-    const rowEl = div('seatrow');
-    rowEl.appendChild(spanCls('rownum', 'R' + r));
-    for (let rl = 1; rl <= maxRail; rl++) {
-      const s = seatsR.find((x) => (x.rail || 1) === rl);
-      rowEl.appendChild(s ? seatEl(s) : div('seat-slot'));
-      if (rl === aisleAfter) rowEl.appendChild(spanCls('aisle', '·'));
+    const normal = seatsR.filter((s) => s.type !== 'stretcher');
+    if (normal.length) {
+      const rowEl = div('seatrow');
+      rowEl.appendChild(spanCls('rownum', 'R' + r));
+      for (let rl = 1; rl <= maxRail; rl++) {
+        const s = normal.find((x) => (x.rail || 1) === rl);
+        rowEl.appendChild(s ? seatEl(s) : div('seat-slot'));
+        if (rl === aisleAfter) rowEl.appendChild(spanCls('aisle', '·'));
+      }
+      host.appendChild(rowEl);
     }
-    host.appendChild(rowEl);
+    for (const st of seatsR.filter((s) => s.type === 'stretcher')) host.appendChild(stretcherEl(st));
   }
-  el('paxCount').textContent = `${Object.values(state.pax).filter(Boolean).length} pax`;
+  el('paxCount').textContent = `${Object.values(state.pax).filter(Boolean).length} occupied`;
+}
+function stretcherEl(s) {
+  const occ = state.pax[s.id] === 'stretcher';
+  const d = div('stretcher' + (occ ? ' occupied' : ''));
+  const len = s.length ?? 78;
+  d.style.minHeight = Math.max(44, Math.min(110, len * 0.6)) + 'px';
+  d.innerHTML = `<span class="lbl">${s.label ?? s.id} · STRETCHER</span>` +
+    `<span class="meta">${occ ? stdMassFor('stretcher') + ' lb' : 'len ' + len + ' in · arm ' + s.arm}</span>`;
+  d.onclick = () => {
+    if (state.pax[s.id] === 'stretcher') delete state.pax[s.id]; else state.pax[s.id] = 'stretcher';
+    renderCabin(); renderNav(); recompute(); save();
+  };
+  return d;
 }
 function seatEl(s) {
   const type = state.pax[s.id] || '';
@@ -1260,28 +1301,47 @@ function renderAircraft() {
 function renderSeats() {
   const host = el('seatEditors');
   const seats = aircraft.stations.pax || [];
-  const rows = seats.map((s, i) =>
-    `<tr>
-      <td><input data-i="${i}" data-k="label" value="${s.label ?? s.id}" style="width:52px"></td>
-      <td><input type="number" data-i="${i}" data-k="row" value="${s.row ?? 1}" style="width:50px"></td>
-      <td><input type="number" data-i="${i}" data-k="rail" value="${s.rail ?? 1}" style="width:50px"></td>
-      <td><input type="number" step="0.01" data-i="${i}" data-k="arm" value="${s.arm}" style="width:84px"></td>
-      <td><button class="btn small" data-rot="${i}" style="min-width:62px">${s.rot ?? 'UP'}</button></td>
+  const rows = seats.map((s, i) => {
+    const isStr = s.type === 'stretcher';
+    const typeCell = `<button class="btn small" data-type="${i}" style="min-width:52px">${isStr ? 'STR' : 'SEAT'}</button>` +
+      (isStr ? `<input type="number" data-len="${i}" value="${s.length ?? 78}" title="length (in)" style="width:50px;margin-left:4px">` : '');
+    return `<tr>
+      <td><input data-i="${i}" data-k="label" value="${s.label ?? s.id}" style="width:46px"></td>
+      <td><input type="number" data-i="${i}" data-k="row" value="${s.row ?? 1}" style="width:44px"></td>
+      <td><input type="number" data-i="${i}" data-k="rail" value="${s.rail ?? 1}" style="width:44px"></td>
+      <td><input type="number" step="0.01" data-i="${i}" data-k="arm" value="${s.arm}" style="width:74px"></td>
+      <td>${typeCell}</td>
+      <td><button class="btn small" data-rot="${i}" style="min-width:56px">${s.rot ?? 'UP'}</button></td>
       <td><button class="btn small ghost" data-del="${i}" style="color:var(--red)">✕</button></td>
-    </tr>`).join('');
-  host.innerHTML = `<table class="vtable"><thead><tr><th>Label</th><th>Row</th><th>Rail</th><th>Arm (in)</th><th>Face</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    </tr>`;
+  }).join('');
+  host.innerHTML = `<table class="vtable"><thead><tr><th>Label</th><th>Row</th><th>Rail</th><th>Arm</th><th>Type / Len</th><th>Face</th><th></th></tr></thead><tbody>${rows}</tbody></table>
     <button class="btn small" id="addSeatBtn" style="margin-top:8px">+ Add seat</button>
-    <p class="hint">Row + rail set the cabin position; arm drives the CG; Face is the seat direction. Seats render fore-to-aft by arm.</p>`;
+    <p class="hint">Row + rail set the cabin position; arm drives the CG. Type switches a position to a stretcher with a length. Tap Face to choose the seat direction.</p>`;
   host.querySelectorAll('input[data-i]').forEach((inp) => inp.oninput = () => {
     const s = aircraft.stations.pax[+inp.dataset.i]; const k = inp.dataset.k;
     s[k] = k === 'label' ? inp.value : Number(inp.value);
     save(); renderCabin(); recompute();
   });
+  host.querySelectorAll('input[data-len]').forEach((inp) => inp.oninput = () => {
+    aircraft.stations.pax[+inp.dataset.len].length = Number(inp.value); save(); renderCabin();
+  });
   host.querySelectorAll('[data-rot]').forEach((b) => b.onclick = () => {
     const s = aircraft.stations.pax[+b.dataset.rot];
-    const seq = ['UP', 'RIGHT', 'DOWN', 'LEFT'];
-    s.rot = seq[(seq.indexOf(s.rot ?? 'UP') + 1) % 4];
-    b.textContent = s.rot; save(); renderCabin();
+    popupMenu(b, ['UP', 'RIGHT', 'DOWN', 'LEFT'].map((v) => ({ label: v, value: v, active: (s.rot ?? 'UP') === v })),
+      (v) => { s.rot = v; save(); renderSeats(); renderCabin(); });
+  });
+  host.querySelectorAll('[data-type]').forEach((b) => b.onclick = () => {
+    const s = aircraft.stations.pax[+b.dataset.type];
+    popupMenu(b, [
+      { label: 'Seat', value: 'seat', active: (s.type ?? 'seat') === 'seat' },
+      { label: 'Stretcher', value: 'stretcher', active: s.type === 'stretcher' },
+    ], (v) => {
+      delete state.pax[s.id];
+      if (v === 'stretcher') { s.type = 'stretcher'; if (s.length == null) s.length = 78; }
+      else s.type = 'seat';
+      save(); renderSeats(); renderCabin(); recompute();
+    });
   });
   host.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => {
     const s = aircraft.stations.pax[+b.dataset.del];
@@ -1294,33 +1354,49 @@ function renderSeats() {
     let n = aircraft.stations.pax.length + 1, id = 's' + n;
     while (ids.includes(id)) { n++; id = 's' + n; }
     const lastRow = Math.max(0, ...aircraft.stations.pax.map((s) => s.row ?? 0));
-    aircraft.stations.pax.push({ id, label: String(n), arm: 0, row: lastRow + 1, rail: 1, sect: '' });
+    aircraft.stations.pax.push({ id, label: String(n), arm: 0, row: lastRow + 1, rail: 1, sect: '', type: 'seat', rot: 'UP' });
     renderSeats(); renderCabin(); recompute(); save();
   };
 }
 
 // ---- dispatch: fuel tanks ---------------------------------------------------
+function tankArrFor(tk, t) { return t === 'table' ? tk.table : t === 'fwd' ? tk.fwdLimit : tk.aftLimit; }
+function ptTableHTML(title, arr, t) {
+  const rows = arr.map((pt, i) =>
+    `<tr><td><input type="number" data-t="${t}" data-i="${i}" data-f="0" value="${pt[0]}" style="width:84px"></td>
+      <td><input type="number" step="0.01" data-t="${t}" data-i="${i}" data-f="1" value="${pt[1]}" style="width:84px"></td>
+      <td><button class="btn small ghost" data-delrow="${t}" data-i="${i}">✕</button></td></tr>`).join('');
+  return `<div style="font-size:12px;color:var(--muted);margin:12px 0 4px;font-weight:700;text-transform:uppercase;letter-spacing:.05em">${title}</div>
+    <table class="vtable"><thead><tr><th>Qty (lb)</th><th>Arm (in)</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <button class="btn small" data-addrow="${t}">+ Add point</button>`;
+}
 function renderTanks() {
   const host = el('tankEditors'); host.innerHTML = '';
   (aircraft.tanks || []).forEach((tk, ti) => {
     const det = document.createElement('details'); det.className = 'env-acc';
-    const rows = (tk.table || []).map((pt, i) =>
-      `<tr><td><input type="number" data-i="${i}" data-f="0" value="${pt[0]}"></td><td><input type="number" step="0.01" data-i="${i}" data-f="1" value="${pt[1]}"></td><td><button class="btn small ghost" data-del="${i}">✕</button></td></tr>`).join('');
-    det.innerHTML = `<summary>${tk.name} <span style="color:var(--muted)">· max ${fmt(tk.maxMass)} lb · fill ${tk.fillOrder ?? '-'} / burn ${tk.burnOrder ?? '-'}</span></summary>
+    const hasLim = tk.fwdLimit && tk.aftLimit;
+    det.innerHTML = `<summary>${tk.name} <span style="color:var(--muted)">· max ${fmt(tk.maxMass)} lb · fill ${tk.fillOrder ?? '-'} / burn ${tk.burnOrder ?? '-'}${hasLim ? ' · CG limits' : ''}</span></summary>
       <div class="grid2">
         <div class="field"><div class="label"><div class="t">Name</div></div><input type="text" class="wide" data-k="name" value="${tk.name}"></div>
         <div class="field"><div class="label"><div class="t">Max mass</div></div><input type="number" data-k="maxMass" value="${tk.maxMass}"><span class="unit">lb</span></div>
         <div class="field"><div class="label"><div class="t">Fill order</div></div><input type="number" data-k="fillOrder" value="${tk.fillOrder ?? 1}"></div>
         <div class="field"><div class="label"><div class="t">Burn order</div></div><input type="number" data-k="burnOrder" value="${tk.burnOrder ?? 1}"></div>
       </div>
-      <div style="font-size:12px;color:var(--muted);margin:10px 0 4px">Fuel-arm table (quantity → CG arm)</div>
-      <table class="vtable"><thead><tr><th>Qty (lb)</th><th>Arm (in)</th><th></th></tr></thead><tbody>${rows}</tbody></table>
-      <div style="margin-top:8px"><button class="btn small" data-add="1">+ Add point</button>
-        <button class="btn small ghost" data-deltank="1" style="margin-left:8px;color:var(--red)">Delete tank</button></div>`;
+      ${ptTableHTML('Fuel-arm table (quantity → CG arm)', tk.table, 'table')}
+      ${hasLim ? ptTableHTML('Forward fuel-CG limit (quantity → arm)', tk.fwdLimit, 'fwd') : ''}
+      ${hasLim ? ptTableHTML('Aft fuel-CG limit (quantity → arm)', tk.aftLimit, 'aft') : ''}
+      <div style="margin-top:12px">
+        ${hasLim ? '<button class="btn small ghost" data-rmlim="1">Remove CG limits</button>' : '<button class="btn small" data-addlim="1">+ Add fuel-CG limits</button>'}
+        <button class="btn small ghost" data-deltank="1" style="margin-left:8px;color:var(--red)">Delete tank</button>
+      </div>`;
     det.querySelectorAll('input[data-k]').forEach((inp) => inp.oninput = () => { const k = inp.dataset.k; tk[k] = k === 'name' ? inp.value : Number(inp.value); save(); recompute(); });
-    det.querySelectorAll('input[data-i]').forEach((inp) => inp.oninput = () => { tk.table[+inp.dataset.i][+inp.dataset.f] = Number(inp.value); save(); recompute(); });
-    det.querySelector('[data-add]').onclick = () => { const last = tk.table[tk.table.length - 1] || [0, aircraft.index.sta]; tk.table.push([last[0] + 1000, last[1]]); renderTanks(); recompute(); save(); };
-    det.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => { tk.table.splice(+b.dataset.del, 1); renderTanks(); recompute(); save(); });
+    det.querySelectorAll('input[data-t]').forEach((inp) => inp.oninput = () => { tankArrFor(tk, inp.dataset.t)[+inp.dataset.i][+inp.dataset.f] = Number(inp.value); save(); recompute(); });
+    det.querySelectorAll('[data-addrow]').forEach((b) => b.onclick = () => { const arr = tankArrFor(tk, b.dataset.addrow); const last = arr[arr.length - 1] || [0, 0]; arr.push([last[0] + 1000, last[1]]); renderTanks(); recompute(); save(); });
+    det.querySelectorAll('[data-delrow]').forEach((b) => b.onclick = () => { tankArrFor(tk, b.dataset.delrow).splice(+b.dataset.i, 1); renderTanks(); recompute(); save(); });
+    const addlim = det.querySelector('[data-addlim]');
+    if (addlim) addlim.onclick = () => { tk.fwdLimit = [[0, -50], [tk.maxMass, -5]]; tk.aftLimit = [[0, 90], [tk.maxMass, 5]]; renderTanks(); recompute(); save(); };
+    const rmlim = det.querySelector('[data-rmlim]');
+    if (rmlim) rmlim.onclick = () => { delete tk.fwdLimit; delete tk.aftLimit; renderTanks(); recompute(); save(); };
     det.querySelector('[data-deltank]').onclick = () => { aircraft.tanks.splice(ti, 1); renderTanks(); recompute(); save(); };
     host.appendChild(det);
   });
@@ -1406,6 +1482,26 @@ function toggle(on, onChange) {
 }
 function btn(t) { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; return b; }
 function sep() { return div('sep'); }
+// Floating popup menu anchored to a button. options: [{label, value, active}].
+let _popup = null;
+function closePopup() { if (_popup) { _popup.remove(); _popup = null; } }
+function popupMenu(anchor, options, onPick) {
+  closePopup();
+  const menu = div('popup-menu'); _popup = menu;
+  for (const o of options) {
+    const b = document.createElement('button');
+    b.className = 'popup-item' + (o.active ? ' on' : '');
+    b.textContent = o.label;
+    b.onmousedown = (e) => { e.preventDefault(); e.stopPropagation(); closePopup(); onPick(o.value); };
+    menu.appendChild(b);
+  }
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+  menu.style.top = (r.bottom + 4) + 'px';
+  setTimeout(() => document.addEventListener('mousedown', closePopup, { once: true }), 0);
+}
+
 function el(id) { return document.getElementById(id); }
 function div(cls) { const d = document.createElement('div'); if (cls) d.className = cls; return d; }
 function spanCls(cls, t) { const s = document.createElement('span'); s.className = cls; s.textContent = t; return s; }

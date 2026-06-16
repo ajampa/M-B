@@ -191,6 +191,29 @@ input.wide { width: 100%; text-align: left; }
 .seat.face-left::after { top: 16px; bottom: 16px; right: 3px; width: 4px; }
 .seat.face-right::after { top: 16px; bottom: 16px; left: 3px; width: 4px; }
 .seat.empty::after { background: rgba(21,41,63,.14); }
+
+/* stretcher / berth — a long position with a settable length */
+.stretcher {
+  width: 100%; border: 1.5px solid var(--line-strong); border-radius: 10px; background: #fff;
+  display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; margin: 4px 0;
+  cursor: pointer; box-shadow: inset 0 -3px 0 rgba(16,24,40,.05);
+}
+.stretcher:active { transform: scale(.99); }
+.stretcher.occupied { background: #e9eef4; border-color: var(--navy); }
+.stretcher .lbl { font-weight: 700; font-size: 13px; letter-spacing: .03em; }
+.stretcher .meta { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* popup menu */
+.popup-menu {
+  position: fixed; z-index: 200; background: #fff; border: 1px solid var(--line-strong);
+  border-radius: 10px; box-shadow: var(--shadow-lg); padding: 4px; min-width: 132px;
+}
+.popup-item {
+  display: block; width: 100%; text-align: left; border: none; background: transparent;
+  padding: 9px 12px; border-radius: 7px; font-size: 14px; cursor: pointer; color: var(--ink);
+}
+.popup-item:hover { background: var(--panel-2); }
+.popup-item.on { color: var(--blue); font-weight: 700; }
 .seat .kg { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .seat .sid { position: absolute; }
 .seat.male { background: #e6edf5; border-color: #aebfd4; }
