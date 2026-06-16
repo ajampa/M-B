@@ -59,7 +59,7 @@ export default {
     ]
   },
 
-  "standardMasses": { "adultMale": 200, "adultFemale": 165, "child": 75, "infant": 22, "stretcher": 250 },
+  "standardMasses": { "adult": 195, "adultMale": 200, "adultFemale": 165, "child": 75, "infant": 22, "stretcher": 250 },
 
   "tanks": [
     {

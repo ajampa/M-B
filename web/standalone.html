@@ -261,13 +261,24 @@ input.wide { width: 100%; text-align: left; }
 .section-tile.filled .st-rows { background: rgba(255,255,255,.55); border-color: #4fae9d; }
 .st-rows span { color: var(--muted); font-size: 12px; font-weight: 600; }
 
-.section-pop { min-width: 210px; padding: 12px 14px; }
-.sp-title { font-size: 11px; color: var(--muted); font-weight: 700; margin-bottom: 12px; text-transform: uppercase; letter-spacing: .05em; }
-.sp-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.section-pop { min-width: 270px; padding: 12px 14px; max-height: 70vh; overflow: auto; }
+.sp-title { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.sp-total { font-size: 13px; font-weight: 700; color: var(--navy); margin: 4px 0 10px; }
+.sp-cat { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+.sp-cat-label { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.sp-cat-label span { color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.sp-cmass { width: 64px; padding: 5px 8px; }
+.sp-ctrl { display: flex; align-items: center; gap: 8px; }
 .sp-btn { width: 48px; height: 48px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--panel-2); font-size: 26px; color: var(--blue); cursor: pointer; }
+.sp-btn.sm { width: 38px; height: 38px; font-size: 21px; }
 .sp-btn:active { background: rgba(31,111,235,.12); }
-.sp-count { font-size: 22px; font-weight: 750; font-variant-numeric: tabular-nums; }
-.sp-quick { display: flex; gap: 8px; margin-top: 12px; }
+.sp-n { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 22px; text-align: center; }
+.sp-quick { display: flex; gap: 8px; margin-top: 10px; }
+
+.seat.infant { background: #f3f0e6; border-color: #cdbf9a; }
+.seat.infant .ic { color: #6b5a2f; }
+.seat.custom { background: #ece6f3; border-color: #b6a6cf; }
+.seat.custom .ic { color: #4a3a6b; }
 .seat .kg { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .seat .sid { position: absolute; }
 .seat.male { background: #e6edf5; border-color: #aebfd4; }
@@ -420,6 +431,18 @@ textarea { width: 100%; min-height: 88px; border: 1px solid var(--line-strong); 
             <div class="field"><div class="label"><div class="t">MZFM</div><div class="h">Max zero fuel</div></div><input type="number" id="cfg_mzfm" /></div>
             <div class="field"><div class="label"><div class="t">MLM</div><div class="h">Max landing</div></div><input type="number" id="cfg_mlm" /></div>
           </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Standard Masses</h2><div class="sub">passenger categories · <span data-u="mass">lb</span></div></div>
+          <div class="grid2">
+            <div class="field"><div class="label"><div class="t">Adult</div></div><input type="number" id="sm_adult" /></div>
+            <div class="field"><div class="label"><div class="t">Male</div></div><input type="number" id="sm_male" /></div>
+            <div class="field"><div class="label"><div class="t">Female</div></div><input type="number" id="sm_female" /></div>
+            <div class="field"><div class="label"><div class="t">Child</div></div><input type="number" id="sm_child" /></div>
+            <div class="field"><div class="label"><div class="t">Infant</div></div><input type="number" id="sm_infant" /></div>
+            <div class="field"><div class="label"><div class="t">Stretcher</div></div><input type="number" id="sm_stretcher" /></div>
+          </div>
+          <p class="hint">Used by both seat-map and section seating.</p>
         </div>
         <div class="card">
           <div class="card-head"><h2>Fleet</h2><div class="sub">this aircraft</div></div>
@@ -963,7 +986,7 @@ const DEFAULT_AIRCRAFT = {
     ]
   },
 
-  "standardMasses": { "adultMale": 200, "adultFemale": 165, "child": 75, "infant": 22, "stretcher": 250 },
+  "standardMasses": { "adult": 195, "adultMale": 200, "adultFemale": 165, "child": 75, "infant": 22, "stretcher": 250 },
 
   "tanks": [
     {
@@ -1270,40 +1293,69 @@ function freshLoad(ac) {
 // ---- engine input -----------------------------------------------------------
 function buildLoad() {
   const sm = aircraft.standardMasses || {};
-  const stdMass = { male: sm.adultMale ?? 200, female: sm.adultFemale ?? 165, child: sm.child ?? 75, stretcher: sm.stretcher ?? 250, adult: sm.adult ?? sm.adultMale ?? 200 };
+  const stdMass = stdMassMap();
   const crew = (aircraft.stations?.crew || [])
     .map((c) => ({ mass: Number(state.crew[c.id]) || 0, arm: c.arm })).filter((x) => x.mass > 0);
   const pantry = (aircraft.stations?.pantry || [])
     .filter((p) => state.pantry[p.id]).map((p) => ({ mass: p.mass, arm: p.arm }));
+  // Normal seating: each occupied seat holds a category (string) or a custom mass (number).
   const pax = Object.entries(state.pax || {}).filter(([, t]) => t)
-    .map(([id, t]) => ({ mass: stdMass[t], arm: seatArm(id) }));
-  // Section seating: a passenger count per section, loaded at the section arm.
+    .map(([id, t]) => ({ mass: typeof t === 'number' ? t : stdMass[t], arm: seatArm(id) }));
+  // Section seating: per-category passenger counts at the section arm.
   if (aircraft.cabinRows) {
     for (const sec of cabinSections()) {
-      const n = Number(state.sections?.[sec.label]) || 0;
-      if (n > 0) pax.push({ mass: n * stdMass.adult, arm: sec.arm });
+      const c = sectionCounts(sec.label);
+      for (const [cat] of SECTION_CATS) {
+        const n = Number(c[cat]) || 0;
+        if (n > 0) pax.push({ mass: n * (stdMass[cat] ?? 0), arm: sec.arm });
+      }
+      const cn = Number(c.customCount) || 0, cm = Number(c.customMass) || 0;
+      if (cn > 0 && cm > 0) pax.push({ mass: cn * cm, arm: sec.arm });
     }
   }
   const cargo = (aircraft.stations?.cargo || [])
     .map((h) => ({ mass: Number(state.cargo[h.id]) || 0, arm: h.arm })).filter((x) => x.mass > 0);
   return { basicMass: +state.basicMass, basicArm: +state.basicArm, crew, pantry, pax, cargo, fuel: state.fuel };
 }
+function stdMassMap() {
+  const sm = aircraft.standardMasses || {};
+  return {
+    male: sm.adultMale ?? 200, female: sm.adultFemale ?? 165, child: sm.child ?? 75,
+    infant: sm.infant ?? 0, stretcher: sm.stretcher ?? 250, adult: sm.adult ?? sm.adultMale ?? 200,
+  };
+}
+const SECTION_CATS = [['adult', 'Adult'], ['male', 'Male'], ['female', 'Female'], ['child', 'Child'], ['infant', 'Infant']];
+// Normalise a section's stored value into a counts object (legacy number = adults).
+function sectionCounts(label) {
+  let c = state.sections?.[label];
+  if (c == null) c = {};
+  if (typeof c === 'number') c = { adult: c };
+  return c;
+}
+function sectionTotal(c) {
+  let t = 0;
+  for (const [cat] of SECTION_CATS) t += Number(c[cat]) || 0;
+  return t + (Number(c.customCount) || 0);
+}
 function seatArm(id) { return (aircraft.stations?.pax?.find((s) => s.id === id) || {}).arm; }
-// Group cabinRows into sections: capacity (sum), mean arm, first/last row label.
+// Group cabinRows into sections. Section arm is either the mean of all row arms,
+// or the average of the first and last row arms (aircraft.sectionArmMode).
 function cabinSections() {
   const map = {};
   for (const r of aircraft.cabinRows || []) { const s = r.section ?? '—'; (map[s] = map[s] || []).push(r); }
+  const mode = aircraft.sectionArmMode || 'mean';
   return Object.keys(map).map((label) => {
     const rs = map[label].slice().sort((a, b) => a.arm - b.arm);
+    const arm = mode === 'endpoints' ? (rs[0].arm + rs[rs.length - 1].arm) / 2 : rs.reduce((a, r) => a + r.arm, 0) / rs.length;
     return {
       label, rows: rs,
       capacity: rs.reduce((a, r) => a + (r.capacity ?? 4), 0),
-      arm: rs.reduce((a, r) => a + r.arm, 0) / rs.length,
+      arm,
       firstRow: rs[0].label, lastRow: rs[rs.length - 1].label,
     };
   }).sort((a, b) => a.arm - b.arm);
 }
-function stdMassFor(t) { const sm = aircraft.standardMasses || {}; return { male: sm.adultMale, female: sm.adultFemale, child: sm.child, stretcher: sm.stretcher ?? 250, adult: sm.adult ?? sm.adultMale }[t]; }
+function stdMassFor(t) { return stdMassMap()[t]; }
 
 // ---- icons ------------------------------------------------------------------
 const I = {
@@ -1426,19 +1478,33 @@ function renderPantry() {
   }
 }
 
-const PAX_CATS = [['male', 'Male'], ['female', 'Female'], ['child', 'Child']];
+const PAX_CATS = [['male', 'Male'], ['female', 'Female'], ['child', 'Child'], ['infant', 'Infant']];
+let customSeatMass = 0;
 function renderPaxBrush() {
   const host = el('paxBrush');
   // Section seating has no per-seat category brush.
   host.style.display = aircraft.cabinRows ? 'none' : '';
   host.innerHTML = '';
   if (aircraft.cabinRows) return;
+  if (!customSeatMass) customSeatMass = stdMassFor('male');
   for (const [k, label] of PAX_CATS) {
     const b = document.createElement('button');
     b.className = brush === k ? 'on' : '';
     b.textContent = `${label} · ${stdMassFor(k)}${massU()}`;
     b.onclick = () => { brush = k; renderPaxBrush(); };
     host.appendChild(b);
+  }
+  const cb = document.createElement('button');
+  cb.className = brush === 'custom' ? 'on' : '';
+  cb.textContent = 'Custom';
+  cb.onclick = () => { brush = 'custom'; renderPaxBrush(); };
+  host.appendChild(cb);
+  if (brush === 'custom') {
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.value = customSeatMass; inp.style.width = '90px';
+    inp.oninput = () => { customSeatMass = Number(inp.value) || 0; };
+    host.appendChild(inp);
+    host.appendChild(spanCls('unit', massU()));
   }
 }
 
@@ -1483,7 +1549,7 @@ function renderSectionCabin() {
   const wrap = div('section-cabin');
   let total = 0;
   for (const sec of cabinSections()) {
-    const cnt = Math.min(Number(state.sections[sec.label]) || 0, sec.capacity);
+    const cnt = sectionTotal(sectionCounts(sec.label));
     total += cnt;
     const tile = div('section-tile' + (cnt > 0 ? ' filled' : ''));
     tile.innerHTML =
@@ -1499,31 +1565,58 @@ function openSectionEditor(tile, sec) {
   closePopup();
   const menu = div('popup-menu section-pop'); _popup = menu;
   menu.onmousedown = (e) => e.stopPropagation();
-  const set = (v) => {
-    v = Math.max(0, Math.min(sec.capacity, Math.round(v)));
-    state.sections[sec.label] = v;
-    countEl.textContent = v + ' / ' + sec.capacity;
-    tile.classList.toggle('filled', v > 0);
-    tile.querySelector('.st-count').textContent = v + '/' + sec.capacity;
-    recompute(); save();
-  };
+  // Ensure the section value is a counts object we can mutate.
+  state.sections = state.sections || {};
+  if (typeof state.sections[sec.label] === 'number') state.sections[sec.label] = { adult: state.sections[sec.label] };
+  if (state.sections[sec.label] == null) state.sections[sec.label] = {};
+  const cc = state.sections[sec.label];
+
   const title = div('sp-title'); title.textContent = `Section ${sec.label} · rows ${sec.firstRow}–${sec.lastRow}`;
-  const row = div('sp-row');
-  const minus = btn('−'); minus.className = 'sp-btn';
-  const plus = btn('+'); plus.className = 'sp-btn';
-  const countEl = div('sp-count'); countEl.textContent = (Number(state.sections[sec.label]) || 0) + ' / ' + sec.capacity;
-  minus.onclick = (e) => { e.preventDefault(); set((Number(state.sections[sec.label]) || 0) - 1); };
-  plus.onclick = (e) => { e.preventDefault(); set((Number(state.sections[sec.label]) || 0) + 1); };
-  row.append(minus, countEl, plus);
+  const totalEl = div('sp-total');
+  const refresh = () => {
+    const t = sectionTotal(cc);
+    totalEl.textContent = `${t} / ${sec.capacity} pax`;
+    tile.classList.toggle('filled', t > 0);
+    tile.querySelector('.st-count').textContent = `${t}/${sec.capacity}`;
+  };
+  menu.append(title, totalEl);
+
+  const addCatRow = (key, label, massGetter) => {
+    const row = div('sp-cat');
+    const lab = div('sp-cat-label'); lab.innerHTML = `${label} <span>${massGetter()}${massU()}</span>`;
+    const ctrl = div('sp-ctrl');
+    const minus = btn('−'); minus.className = 'sp-btn sm';
+    const plus = btn('+'); plus.className = 'sp-btn sm';
+    const nEl = div('sp-n'); nEl.textContent = Number(cc[key]) || 0;
+    const set = (v) => {
+      v = Math.max(0, Math.round(v));
+      const others = sectionTotal(cc) - (Number(cc[key]) || 0);
+      if (v + others > sec.capacity) v = sec.capacity - others;
+      cc[key] = v; nEl.textContent = v; recompute(); save(); refresh();
+    };
+    minus.onclick = (e) => { e.preventDefault(); set((Number(cc[key]) || 0) - 1); };
+    plus.onclick = (e) => { e.preventDefault(); set((Number(cc[key]) || 0) + 1); };
+    ctrl.append(minus, nEl, plus); row.append(lab, ctrl);
+    return { row, lab };
+  };
+
+  for (const [cat, label] of SECTION_CATS) menu.appendChild(addCatRow(cat, label, () => stdMassFor(cat) ?? 0).row);
+
+  // Custom mass row.
+  const cust = addCatRow('customCount', 'Custom', () => Number(cc.customMass) || 0);
+  cust.lab.innerHTML = `Custom <input type="number" class="sp-cmass" value="${cc.customMass || 0}" title="custom mass"> ${massU()}`;
+  cust.lab.querySelector('.sp-cmass').oninput = (e) => { cc.customMass = Number(e.target.value); recompute(); save(); };
+  menu.appendChild(cust.row);
+
   const quick = div('sp-quick');
-  const fill = btn('Fill'); fill.className = 'btn small'; fill.onclick = (e) => { e.preventDefault(); set(sec.capacity); };
-  const clr = btn('Clear'); clr.className = 'btn small ghost'; clr.onclick = (e) => { e.preventDefault(); set(0); };
-  quick.append(fill, clr);
-  menu.append(title, row, quick);
+  const clr = btn('Clear section'); clr.className = 'btn small ghost';
+  clr.onclick = (e) => { e.preventDefault(); for (const k of Object.keys(cc)) delete cc[k]; recompute(); save(); closePopup(); renderSectionCabin(); };
+  quick.append(clr); menu.appendChild(quick);
+
   document.body.appendChild(menu);
   const r = tile.getBoundingClientRect();
   menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
-  menu.style.top = (r.bottom + 6) + 'px';
+  menu.style.top = Math.min(r.bottom + 6, window.innerHeight - menu.offsetHeight - 8) + 'px';
   setTimeout(() => document.addEventListener('mousedown', closePopup, { once: true }), 0);
 }
 function stretcherEl(s) {
@@ -1540,14 +1633,19 @@ function stretcherEl(s) {
   return d;
 }
 function seatEl(s) {
-  const type = state.pax[s.id] || '';
+  const val = state.pax[s.id];
+  const isCustom = typeof val === 'number';
+  const occupied = val != null && val !== '' && val !== false;
+  const cat = isCustom ? 'custom' : (val || '');
   const face = s.rot ? ' face-' + String(s.rot).toLowerCase() : '';
-  const d = div('seat ' + (type || 'empty') + face);
-  const tag = { male: 'M', female: 'F', child: 'C' }[type] || '';
-  d.innerHTML = `<span class="ic">${type ? tag : (s.label ?? s.id)}</span><span class="kg">${type ? stdMassFor(type) + massU() : 'arm ' + s.arm}</span>`;
+  const d = div('seat ' + (occupied ? cat : 'empty') + face);
+  const tag = { male: 'M', female: 'F', child: 'C', infant: 'I', custom: '✶' }[cat] || '';
+  const massTxt = occupied ? ((isCustom ? val : stdMassFor(cat)) + massU()) : 'arm ' + s.arm;
+  d.innerHTML = `<span class="ic">${occupied ? tag : (s.label ?? s.id)}</span><span class="kg">${massTxt}</span>`;
   d.onclick = () => {
-    if (state.pax[s.id] === brush) delete state.pax[s.id];
-    else state.pax[s.id] = brush;
+    const apply = brush === 'custom' ? (Number(customSeatMass) || 0) : brush;
+    if (state.pax[s.id] === apply) delete state.pax[s.id];
+    else state.pax[s.id] = apply;
     renderCabin(); renderNav(); recompute(); save();
   };
   return d;
@@ -1627,6 +1725,9 @@ function renderAircraft() {
   bindNum('basicMass', 'basicMass');
   bindNum('basicArm', 'basicArm');
   for (const k of ['mrw', 'mtom', 'mzfm', 'mlm']) { el('cfg_' + k).value = aircraft.limits[k]; bindCfg('cfg_' + k, () => aircraft.limits, k); }
+  aircraft.standardMasses = aircraft.standardMasses || {};
+  const smMap = { sm_adult: 'adult', sm_male: 'adultMale', sm_female: 'adultFemale', sm_child: 'child', sm_infant: 'infant', sm_stretcher: 'stretcher' };
+  for (const [id, key] of Object.entries(smMap)) { el(id).value = aircraft.standardMasses[key] ?? ''; bindCfg(id, () => aircraft.standardMasses, key); }
 }
 
 // ---- dispatch: cabin seats --------------------------------------------------
@@ -1640,9 +1741,17 @@ function renderRowEditor(host) {
       <td><input type="number" data-i="${i}" data-k="capacity" value="${r.capacity ?? 4}" style="width:50px"></td>
       <td><button class="btn small ghost" data-del="${i}" style="color:var(--red)">✕</button></td>
     </tr>`).join('');
-  host.innerHTML = `<table class="vtable"><thead><tr><th>Row</th><th>Sect</th><th>Arm (${armU()})</th><th>Cap</th><th></th></tr></thead><tbody>${body}</tbody></table>
+  const mode = aircraft.sectionArmMode || 'mean';
+  host.innerHTML = `
+    <div class="field"><div class="label"><div class="t">Section arm</div><div class="h">how each section's CG arm is derived</div></div>
+      <div class="seg" id="armMode">
+        <button data-m="mean" class="${mode === 'mean' ? 'on' : ''}">Average of all rows</button>
+        <button data-m="endpoints" class="${mode === 'endpoints' ? 'on' : ''}">First + last row</button>
+      </div></div>
+    <table class="vtable"><thead><tr><th>Row</th><th>Sect</th><th>Arm (${armU()})</th><th>Cap</th><th></th></tr></thead><tbody>${body}</tbody></table>
     <button class="btn small" id="addRowBtn" style="margin-top:8px">+ Add row</button>
-    <p class="hint">Section seating: pilots enter a passenger count per row (× standard mass ${stdMassFor('adult')} ${massU()}). Rows render grouped by section, fore-to-aft by arm.</p>`;
+    <p class="hint">Section seating: pilots add passengers per section by category. Rows define each section's arms and capacity.</p>`;
+  host.querySelectorAll('#armMode button').forEach((b) => b.onclick = () => { aircraft.sectionArmMode = b.dataset.m; save(); renderRowEditor(host); recompute(); });
   host.querySelectorAll('input[data-i]').forEach((inp) => inp.oninput = () => {
     const r = aircraft.cabinRows[+inp.dataset.i]; const k = inp.dataset.k;
     r[k] = (k === 'label' || k === 'section') ? inp.value : Number(inp.value);
