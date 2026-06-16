@@ -61,6 +61,18 @@ export function renderEnvelopeSVG(aircraft, result, opts = {}) {
   // Takeoff/landing envelope (filled, primary).
   p.push(`<polygon points="${ring(aircraft.envelopes.TOL)}" fill="url(#tolFill)" stroke="#1db954" stroke-width="2"/>`);
 
+  // Allowable fuel-CG corridor: where total CG could sit if the fuel were at
+  // its forward / aft tank-CG limit across the burn. The fuel line must stay
+  // inside this band. Converges to ZFM (no fuel) and widens toward TOM.
+  const band = (result?.fuelLine || []).filter((s) => s.fwd && s.aft);
+  if (band.length > 1) {
+    const fwd = band.map((s) => `${sx(s.fwd.pctMac).toFixed(1)},${sy(s.fwd.mass).toFixed(1)}`);
+    const aft = band.map((s) => `${sx(s.aft.pctMac).toFixed(1)},${sy(s.aft.mass).toFixed(1)}`);
+    p.push(`<polygon points="${fwd.concat([...aft].reverse()).join(' ')}" fill="rgba(192,57,43,0.06)" stroke="none"/>`);
+    p.push(`<polyline points="${fwd.join(' ')}" fill="none" stroke="#d98a8a" stroke-width="1.2" stroke-dasharray="4 3"/>`);
+    p.push(`<polyline points="${aft.join(' ')}" fill="none" stroke="#d98a8a" stroke-width="1.2" stroke-dasharray="4 3"/>`);
+  }
+
   // Fuel line: solid line of the CG locus as fuel burns from takeoff down to
   // zero fuel (connects TOM through LDM all the way to ZFM). It bends as tanks
   // empty in burn order. Arrow points in the burn direction (toward ZFM).
@@ -94,7 +106,8 @@ export function renderEnvelopeSVG(aircraft, result, opts = {}) {
   p.push(`<g transform="translate(${m.left + 7} ${m.top + 6})" font-size="10">
     <rect x="0" y="0" width="13" height="3" rx="1.5" fill="#1db954"/><text x="18" y="4" fill="#5b6573">Takeoff/Landing</text>
     <rect x="0" y="13" width="13" height="3" rx="1.5" fill="#9cc6ff"/><text x="18" y="17" fill="#5b6573">In-flight</text>
-    <rect x="0" y="26" width="13" height="3" rx="1.5" fill="#d98a14"/><text x="18" y="30" fill="#5b6573">Fuel burn</text></g>`);
+    <rect x="0" y="26" width="13" height="3" rx="1.5" fill="#d98a14"/><text x="18" y="30" fill="#5b6573">Fuel burn</text>
+    <rect x="0" y="39" width="13" height="3" rx="1.5" fill="#d98a8a"/><text x="18" y="43" fill="#5b6573">Fuel CG limits</text></g>`);
 
   p.push('</svg>');
   return p.join('\n');

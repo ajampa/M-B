@@ -144,6 +144,29 @@ export function tankLimitCheck(tanks, qtyMap) {
   return { checked, inside, tanks: detail };
 }
 
+// Combined fuel CG if every limited tank sat at its FORWARD limit, and at its
+// AFT limit, for a given per-tank quantity state. Tanks without limits use
+// their actual arm. Returns null when no tank carries limits. Used to draw the
+// allowable fuel-CG corridor inside the main CG envelope.
+export function fuelLimitArms(tanks, qtyMap) {
+  let mass = 0, fwdMoment = 0, aftMoment = 0, any = false;
+  for (const tk of tanks) {
+    const q = qtyMap[tk.name] || 0;
+    mass += q;
+    if (tk.fwdLimit && tk.aftLimit) {
+      any = true;
+      fwdMoment += q * interpClamp(tk.fwdLimit, q);
+      aftMoment += q * interpClamp(tk.aftLimit, q);
+    } else {
+      const a = tankArm(tk, q);
+      fwdMoment += q * a;
+      aftMoment += q * a;
+    }
+  }
+  if (!any) return null;
+  return { mass, fwdArm: mass ? fwdMoment / mass : 0, aftArm: mass ? aftMoment / mass : 0 };
+}
+
 // Build a closed polygon ring [[pctMac, mass], ...] for drawing an envelope.
 export function envelopePolygon(env) {
   const fwd = [...env.fwd].sort((a, b) => a[0] - b[0]); // mass ascending
@@ -221,32 +244,16 @@ export function distributeFuel(tanks, totalMass) {
   return tankStateMoment(tanks, fillTanks(tanks, totalMass));
 }
 
-// EASA fuel chain. Ramp = Taxi + Trip + Contingency + Alternate + FinalReserve + Extra.
-// Returns the breakdown plus takeoff/landing fuel and a minimum-fuel check.
-export function fuelChain(fuel) {
+// Fuel chain (simplified): the dispatcher enters Ramp (block), Taxi and Trip.
+//   Takeoff = Ramp − Taxi      Landing = Takeoff − Trip
+// `minReserve` (sum of tank minimum reserves) is the floor for landing fuel.
+export function fuelChain(fuel, minReserve = 0) {
+  const ramp = num(fuel.ramp);
   const taxi = num(fuel.taxi);
   const trip = num(fuel.trip);
-  const contingency = num(fuel.contingency);
-  const alternate = num(fuel.alternate);
-  const finalReserve = num(fuel.finalReserve);
-  const extra = num(fuel.extra);
-  const requiredRamp = taxi + trip + contingency + alternate + finalReserve + extra;
-  const ramp = fuel.ramp != null ? num(fuel.ramp) : requiredRamp;
   const takeoff = ramp - taxi;
-  const landing = takeoff - trip; // = contingency + alternate + finalReserve + extra
-  return {
-    ramp,
-    taxi,
-    trip,
-    contingency,
-    alternate,
-    finalReserve,
-    extra,
-    takeoff,
-    landing,
-    requiredRamp,
-    sufficient: ramp + 1e-6 >= requiredRamp,
-  };
+  const landing = takeoff - trip;
+  return { ramp, taxi, trip, takeoff, landing, minReserve, sufficient: landing + 1e-6 >= minReserve };
 }
 
 function num(v) {
@@ -281,9 +288,10 @@ export function computeLoadsheet(aircraft, load) {
   // Fuel chain + fuel CG states. Tanks are FILLED by fillOrder; the in-flight
   // state is the takeoff fill BURNED by burnOrder, so landing CG reflects the
   // real drain sequence and each tank's fuel-arm table.
-  const fc = fuelChain(load.fuel || {});
   const tanks = aircraft.tanks || [];
   const hasTanks = tanks.length > 0;
+  const minReserve = tanks.reduce((a, t) => a + (t.minReserve || 0), 0);
+  const fc = fuelChain(load.fuel || {}, minReserve);
   const takeoffQty = hasTanks ? fillTanks(tanks, fc.takeoff) : null;
   const landingQty = hasTanks ? burnTanks(tanks, takeoffQty, fc.takeoff - fc.landing) : null;
   const takeoffFuel = hasTanks ? tankStateMoment(tanks, takeoffQty) : armlessFuel(fc.takeoff, aircraft);
@@ -361,13 +369,22 @@ function buildFuelLine(aircraft, zfm, tanks, fc, burnMax, steps) {
     const qty = hasTanks ? burnTanks(tanks, takeoffQty, burned) : null;
     const fuel = hasTanks ? tankStateMoment(tanks, qty) : armlessFuel(fc.takeoff - burned, aircraft);
     const pt = describe(toPoint(combine(zfm, fuel)), aircraft);
-    path.push({
+    const sample = {
       ...pt,
       fuelRemaining: fc.takeoff - burned,
       fuelArm: fuel.arm,
       status: envelopeStatus(aircraft, 'FLT', pt.mass, pt.pctMac),
       limit: hasTanks ? tankLimitCheck(tanks, qty) : { checked: false, inside: true, tanks: [] },
-    });
+    };
+    // Allowable fuel-CG corridor: total CG if fuel sat at its fwd / aft limit.
+    const lim = hasTanks ? fuelLimitArms(tanks, qty) : null;
+    if (lim) {
+      const fwdPt = describe(toPoint(combine(zfm, { mass: lim.mass, moment: lim.mass * lim.fwdArm })), aircraft);
+      const aftPt = describe(toPoint(combine(zfm, { mass: lim.mass, moment: lim.mass * lim.aftArm })), aircraft);
+      sample.fwd = { mass: fwdPt.mass, pctMac: fwdPt.pctMac };
+      sample.aft = { mass: aftPt.mass, pctMac: aftPt.pctMac };
+    }
+    path.push(sample);
   }
   return path;
 }

@@ -25,7 +25,7 @@ function freshLoad() {
     pantry: { pantryA: true },
     pax: { s1: 'male', s2: 'female', s3: 'male', s4: 'female', s5: 'male', s6: 'female' },
     cargo: { aftHold: 600 },
-    fuel: { taxi: 400, trip: 14000, contingency: 700, alternate: 3000, finalReserve: 2300, extra: 0 },
+    fuel: { ramp: 20400, taxi: 400, trip: 14000 },
   };
 }
 
@@ -204,7 +204,7 @@ function renderCargo() {
   }
 }
 
-const FUEL_FIELDS = [['taxi', 'Taxi'], ['trip', 'Trip'], ['contingency', 'Contingency'], ['alternate', 'Alternate'], ['finalReserve', 'Final reserve'], ['extra', 'Extra']];
+const FUEL_FIELDS = [['ramp', 'Ramp (block)'], ['taxi', 'Taxi'], ['trip', 'Trip']];
 function renderFuel() {
   const host = el('fuelInputs'); host.innerHTML = '';
   for (const [k, label] of FUEL_FIELDS) {
@@ -238,10 +238,10 @@ function renderSummary(r) {
 function renderFuelDerived(r) {
   const f = r.fuel;
   const cell = (v, k, accent) => `<div class="readout ${accent ? 'accent' : ''}"><div class="v">${fmt(v)} <small>lb</small></div><div class="k">${k}</div></div>`;
-  el('fuelDerived').innerHTML = cell(f.ramp, 'Ramp', 1) + cell(f.takeoff, 'Takeoff', 1) + cell(f.trip, 'Trip') + cell(f.landing, 'Landing');
+  el('fuelDerived').innerHTML = cell(f.takeoff, 'Takeoff', 1) + cell(f.landing, 'Landing', 1) + cell(f.trip, 'Trip') + cell(f.ramp, 'Ramp');
   let msg = f.sufficient
-    ? pill('good', `Ramp ≥ minimum required (${fmt(f.requiredRamp)} lb)`)
-    : pill('bad', `Ramp below minimum (${fmt(f.requiredRamp)} lb)`);
+    ? pill('good', `Landing ≥ minimum reserve (${fmt(f.minReserve)} lb)`)
+    : pill('bad', `Landing below minimum reserve (${fmt(f.minReserve)} lb)`);
   const fl = r.fuelLimits;
   if (fl && fl.takeoff.checked) {
     const ok = fl.takeoff.inside && fl.landing.inside;

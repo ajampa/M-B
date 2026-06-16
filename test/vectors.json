@@ -34,7 +34,7 @@
         { "mass": 200, "arm": 560.0 }, { "mass": 200, "arm": 560.0 }
       ],
       "cargo": [ { "mass": 1000, "arm": 660.0 } ],
-      "fuel": { "taxi": 300, "trip": 6000, "contingency": 300, "alternate": 1500, "finalReserve": 1200, "extra": 0 }
+      "fuel": { "ramp": 9300, "taxi": 300, "trip": 6000 }
     },
     "expect": {
       "zfm": { "mass": 29630, "pctMac": 27.7175 },
