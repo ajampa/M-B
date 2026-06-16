@@ -2,8 +2,8 @@ import { computeLoadsheet } from '../engine/massbalance.mjs';
 import { renderEnvelopeSVG } from './chart.js';
 import DEFAULT_AIRCRAFT from './default-aircraft.js';
 
-const LS_AC = 'mb.aircraft.v3';
-const LS_LOAD = 'mb.load.v3';
+const LS_AC = 'mb.aircraft.v4';
+const LS_LOAD = 'mb.load.v4';
 
 let aircraft = load(LS_AC) || structuredClone(DEFAULT_AIRCRAFT);
 let state = load(LS_LOAD) || freshLoad();
@@ -23,9 +23,9 @@ function freshLoad() {
     basicArm: aircraft.basic?.arm ?? aircraft.index.sta,
     crew: Object.fromEntries((aircraft.stations.crew || []).map((c) => [c.id, 200])),
     pantry: { pantryA: true },
-    pax: { '3L': 'male', '3R': 'female', '4L': 'male', '4R': 'female' },
-    cargo: { aftHold: 1000 },
-    fuel: { taxi: 300, trip: 7000, contingency: 350, alternate: 1800, finalReserve: 1300, extra: 0 },
+    pax: { s1: 'male', s2: 'female', s3: 'male', s4: 'female', s5: 'male', s6: 'female' },
+    cargo: { aftHold: 600 },
+    fuel: { taxi: 400, trip: 14000, contingency: 700, alternate: 3000, finalReserve: 2300, extra: 0 },
   };
 }
 
@@ -67,6 +67,7 @@ const NAV = [
   { id: 'fuel', label: 'Fuel', icon: I.fuel },
   { group: 'Dispatch' },
   { id: 'aircraft', label: 'Aircraft', icon: I.aircraft },
+  { id: 'seats', label: 'Cabin Seats', icon: I.pax },
   { id: 'tanks', label: 'Fuel Tanks', icon: I.fuel },
   { id: 'envelope', label: 'Envelope & Index', icon: I.envelope },
 ];
@@ -91,6 +92,7 @@ function renderNav() {
 function showPanel() {
   document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === 'panel-' + activePanel));
   if (activePanel === 'aircraft') renderAircraft();
+  else if (activePanel === 'seats') renderSeats();
   else if (activePanel === 'tanks') renderTanks();
   else if (activePanel === 'envelope') renderEnvelope();
 }
@@ -136,19 +138,28 @@ function renderPaxBrush() {
     host.appendChild(b);
   }
 }
+// Lay the cabin out fore-to-aft by row (rows ordered by their mean arm), and
+// within a row left-to-right by rail. Single seats are centred. So the visual
+// position follows each seat's arm.
 function renderCabin() {
   const host = el('cabin'); host.innerHTML = '';
+  const seats = aircraft.stations.pax || [];
   const rows = {};
-  for (const s of aircraft.stations.pax) { const r = (s.id.match(/\d+/) || ['0'])[0]; (rows[r] = rows[r] || []).push(s); }
-  for (const r of Object.keys(rows).sort((a, b) => a - b)) {
+  for (const s of seats) { const r = s.row ?? 0; (rows[r] = rows[r] || []).push(s); }
+  const meanArm = (arr) => arr.reduce((a, s) => a + s.arm, 0) / arr.length;
+  const order = Object.keys(rows).sort((a, b) => meanArm(rows[a]) - meanArm(rows[b]));
+  for (const r of order) {
+    const seatsR = rows[r].slice().sort((a, b) => (a.rail ?? 0) - (b.rail ?? 0));
     const rowEl = div('seatrow');
-    const seats = rows[r];
-    const left = seats.filter((s) => /L/i.test(s.id));
-    const right = seats.filter((s) => /R/i.test(s.id));
-    rowEl.appendChild(spanCls('rownum', r));
-    for (const s of left) rowEl.appendChild(seatEl(s));
-    rowEl.appendChild(spanCls('aisle', '·'));
-    for (const s of right) rowEl.appendChild(seatEl(s));
+    rowEl.appendChild(spanCls('rownum', 'R' + r));
+    if (seatsR.length === 1) {
+      rowEl.appendChild(seatEl(seatsR[0]));
+    } else {
+      const mid = Math.ceil(seatsR.length / 2);
+      seatsR.slice(0, mid).forEach((s) => rowEl.appendChild(seatEl(s)));
+      rowEl.appendChild(spanCls('aisle', '·'));
+      seatsR.slice(mid).forEach((s) => rowEl.appendChild(seatEl(s)));
+    }
     host.appendChild(rowEl);
   }
   el('paxCount').textContent = `${Object.values(state.pax).filter(Boolean).length} pax`;
@@ -157,7 +168,7 @@ function seatEl(s) {
   const type = state.pax[s.id] || '';
   const d = div('seat ' + (type || 'empty'));
   const tag = { male: 'M', female: 'F', child: 'C' }[type] || '';
-  d.innerHTML = `<span class="ic">${type ? tag : s.id}</span><span class="kg">${type ? stdMassFor(type) + 'lb' : ''}</span>`;
+  d.innerHTML = `<span class="ic">${type ? tag : (s.label ?? s.id)}</span><span class="kg">${type ? stdMassFor(type) + 'lb' : 'arm ' + s.arm}</span>`;
   d.onclick = () => {
     if (state.pax[s.id] === brush) delete state.pax[s.id];
     else state.pax[s.id] = brush;
@@ -232,6 +243,42 @@ function renderAircraft() {
   for (const k of ['mrw', 'mtom', 'mzfm', 'mlm']) { el('cfg_' + k).value = aircraft.limits[k]; bindCfg('cfg_' + k, () => aircraft.limits, k); }
 }
 
+// ---- dispatch: cabin seats --------------------------------------------------
+function renderSeats() {
+  const host = el('seatEditors');
+  const seats = aircraft.stations.pax || [];
+  const rows = seats.map((s, i) =>
+    `<tr>
+      <td><input data-i="${i}" data-k="label" value="${s.label ?? s.id}" style="width:58px"></td>
+      <td><input type="number" data-i="${i}" data-k="row" value="${s.row ?? 1}" style="width:54px"></td>
+      <td><input type="number" data-i="${i}" data-k="rail" value="${s.rail ?? 1}" style="width:54px"></td>
+      <td><input type="number" step="0.01" data-i="${i}" data-k="arm" value="${s.arm}" style="width:90px"></td>
+      <td><button class="btn small ghost" data-del="${i}" style="color:var(--red)">✕</button></td>
+    </tr>`).join('');
+  host.innerHTML = `<table class="vtable"><thead><tr><th>Label</th><th>Row</th><th>Rail</th><th>Arm (in)</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <button class="btn small" id="addSeatBtn" style="margin-top:8px">+ Add seat</button>
+    <p class="hint">Row + rail set the cabin position; arm drives the CG. Seats render fore-to-aft by arm.</p>`;
+  host.querySelectorAll('input[data-i]').forEach((inp) => inp.oninput = () => {
+    const s = aircraft.stations.pax[+inp.dataset.i]; const k = inp.dataset.k;
+    s[k] = k === 'label' ? inp.value : Number(inp.value);
+    save(); renderCabin(); recompute();
+  });
+  host.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => {
+    const s = aircraft.stations.pax[+b.dataset.del];
+    delete state.pax[s.id];
+    aircraft.stations.pax.splice(+b.dataset.del, 1);
+    renderSeats(); renderCabin(); renderNav(); recompute(); save();
+  });
+  el('addSeatBtn').onclick = () => {
+    const ids = aircraft.stations.pax.map((s) => s.id);
+    let n = aircraft.stations.pax.length + 1, id = 's' + n;
+    while (ids.includes(id)) { n++; id = 's' + n; }
+    const lastRow = Math.max(0, ...aircraft.stations.pax.map((s) => s.row ?? 0));
+    aircraft.stations.pax.push({ id, label: String(n), arm: 0, row: lastRow + 1, rail: 1, sect: '' });
+    renderSeats(); renderCabin(); recompute(); save();
+  };
+}
+
 // ---- dispatch: fuel tanks ---------------------------------------------------
 function renderTanks() {
   const host = el('tankEditors'); host.innerHTML = '';
@@ -293,7 +340,7 @@ function renderEnvEditors() {
     host.appendChild(det);
   }
 }
-function renderDispatch() { renderAircraft(); renderTanks(); renderEnvelope(); }
+function renderDispatch() { renderAircraft(); renderSeats(); renderTanks(); renderEnvelope(); }
 el('xmlImport').onclick = () => {
   try { parseLegacyXml(el('xmlIn').value); save(); renderDispatch(); recompute(); el('xmlIn').value = ''; alert('Imported. Review the values.'); }
   catch (e) { alert('Could not parse: ' + e.message); }

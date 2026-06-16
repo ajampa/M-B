@@ -1,88 +1,73 @@
 {
-  "id": "sample-jet",
-  "name": "Sample Jet (from supplied data)",
-  "_note": "Index, MAC and envelope curves are REAL supplied values. Stations, tanks, crew and limits marked _placeholder are stand-ins until AFM data is provided.",
+  "id": "d-abei",
+  "name": "D-ABEI",
+  "_note": "Index, MAC, basic, MZFM, the Combined fuel-arm table, the CG envelope and the seat arms are REAL supplied values. MTOM/MLM/MRW and crew/pantry/cargo arms marked _placeholder are stand-ins until provided.",
   "units": { "mass": "lb", "arm": "in" },
 
-  "index": { "sta": 514.0, "scale": 11000.0, "offset": 55.0 },
-  "mac": { "lemac": 488.025, "maclen": 92.64 },
+  "index": { "sta": -1.5, "scale": 18000.0, "offset": 25.0 },
+  "mac": { "lemac": -33.443, "maclen": 133.772 },
 
   "limits": {
-    "_placeholder": true,
-    "mrw": 48800,
-    "mtom": 48300,
-    "mzfm": 38000,
-    "mlm": 44000
+    "mzfm": 45900,
+    "mtom": 77900,
+    "mlm": 77900,
+    "mrw": 78200,
+    "_placeholder": "mtom/mlm/mrw inferred from envelope max; confirm from AFM"
   },
 
   "envelopes": {
     "TOL": {
-      "fwd": [[26000, 20.0], [38000, 20.0], [39500, 16.0], [48300, 29.0]],
-      "aft": [[26000, 32.5], [28000, 34.0], [30000, 34.0], [32000, 35.0], [38000, 35.0], [43000, 38.0], [48300, 38.0]]
+      "fwd": [[40300, 34.4], [42990, 28.0], [50706, 25.0], [77500, 25.0], [77900, 25.0]],
+      "aft": [[40300, 44.0], [49175, 44.0], [66200, 39.11], [77500, 35.25], [77900, 35.08]]
     },
     "FLT": {
-      "fwd": [[26000, 20.0], [38000, 20.0], [39500, 16.0], [44750, 16.0], [48300, 21.0]],
-      "aft": [[26000, 35.0], [38000, 35.0], [43000, 38.0], [48300, 38.0]]
+      "fwd": [[40300, 34.4], [42990, 28.0], [50706, 25.0], [77500, 25.0], [77900, 25.0]],
+      "aft": [[40300, 44.0], [49175, 44.0], [66200, 39.11], [77500, 35.25], [77900, 35.08]]
     }
   },
   "cgLimits": { "min": 0, "max": 100 },
 
-  "basic": { "_placeholder": true, "mass": 27000, "arm": 511.0, "label": "Basic Mass / Basic Arm (from weighing)" },
+  "basic": { "mass": 40680, "arm": 26.4, "label": "Basic Mass / Basic Arm (D-ABEI weighing)" },
 
   "stations": {
     "crew": [
-      { "id": "cpt", "label": "Captain", "arm": 330.0 },
-      { "id": "fo", "label": "First Officer", "arm": 330.0 }
+      { "id": "cpt", "label": "Captain", "arm": -310.0, "_placeholder": true },
+      { "id": "fo", "label": "First Officer", "arm": -310.0, "_placeholder": true }
     ],
     "pantry": [
-      { "id": "pantryA", "label": "Pantry A (fwd galley)", "mass": 250, "arm": 360.0 },
-      { "id": "pantryB", "label": "Pantry B (aft galley)", "mass": 180, "arm": 600.0 }
+      { "id": "pantryA", "label": "Forward galley", "mass": 300, "arm": -280.0, "_placeholder": true }
     ],
     "pax": [
-      { "id": "1L", "label": "Row 1 L", "arm": 455.0 },
-      { "id": "1R", "label": "Row 1 R", "arm": 455.0 },
-      { "id": "2L", "label": "Row 2 L", "arm": 490.0 },
-      { "id": "2R", "label": "Row 2 R", "arm": 490.0 },
-      { "id": "3L", "label": "Row 3 L", "arm": 525.0 },
-      { "id": "3R", "label": "Row 3 R", "arm": 525.0 },
-      { "id": "4L", "label": "Row 4 L", "arm": 560.0 },
-      { "id": "4R", "label": "Row 4 R", "arm": 560.0 }
+      { "id": "s1", "label": "1", "arm": -252.0, "row": 1, "rail": 1, "sect": "A" },
+      { "id": "s2", "label": "2", "arm": -252.0, "row": 1, "rail": 4, "sect": "A" },
+      { "id": "s3", "label": "3", "arm": -199.0, "row": 2, "rail": 1, "sect": "A" },
+      { "id": "s4", "label": "4", "arm": -199.0, "row": 2, "rail": 4, "sect": "A" },
+      { "id": "s5", "label": "5", "arm": -148.0, "row": 3, "rail": 1, "sect": "B" },
+      { "id": "s6", "label": "6", "arm": -148.0, "row": 3, "rail": 2, "sect": "B" },
+      { "id": "s7", "label": "7", "arm": -90.0, "row": 4, "rail": 1, "sect": "B" },
+      { "id": "s8", "label": "8", "arm": -90.0, "row": 4, "rail": 2, "sect": "B" },
+      { "id": "s9", "label": "9", "arm": -36.0, "row": 5, "rail": 1, "sect": "C" },
+      { "id": "s10", "label": "10", "arm": -34.0, "row": 6, "rail": 3, "sect": "C" },
+      { "id": "s11", "label": "11", "arm": -9.0, "row": 7, "rail": 3, "sect": "C" },
+      { "id": "s12", "label": "12", "arm": 16.0, "row": 8, "rail": 3, "sect": "C" },
+      { "id": "s13", "label": "13", "arm": 26.0, "row": 9, "rail": 1, "sect": "C" }
     ],
     "cargo": [
-      { "id": "fwdHold", "label": "Forward Hold", "arm": 250.0, "maxMass": 1500 },
-      { "id": "aftHold", "label": "Aft Hold", "arm": 660.0, "maxMass": 1500 }
+      { "id": "fwdHold", "label": "Forward hold", "arm": -380.0, "maxMass": 1000, "_placeholder": true },
+      { "id": "aftHold", "label": "Aft baggage", "arm": 180.0, "maxMass": 2000, "_placeholder": true }
     ]
   },
 
-  "standardMasses": {
-    "_note": "EASA standard masses (lb-equivalents are placeholders).",
-    "adultMale": 200,
-    "adultFemale": 165,
-    "child": 75,
-    "infant": 22
-  },
+  "standardMasses": { "adultMale": 200, "adultFemale": 165, "child": 75, "infant": 22 },
 
   "tanks": [
     {
-      "name": "Main",
-      "maxMass": 9720,
+      "name": "Combined",
+      "maxMass": 33800,
+      "minReserve": 200,
       "fillOrder": 1,
-      "burnOrder": 3,
-      "table": [[0,473.5],[338,473.5],[675,475.8],[1013,477.6],[1350,479.0],[1688,480.3],[2025,481.5],[2363,482.6],[2700,483.7],[3038,484.8],[3375,486.0],[3713,487.2],[4050,488.3],[4388,489.5],[4725,490.6],[5063,491.7],[5400,492.8],[5738,493.8],[6075,494.9],[6413,495.9],[6750,496.9],[7088,497.8],[7425,498.8],[7763,499.8],[8100,500.8],[8438,501.8],[8775,502.9],[9113,504.1],[9450,505.4],[9720,506.6]]
-    },
-    {
-      "name": "Aux",
-      "maxMass": 7169,
-      "fillOrder": 2,
       "burnOrder": 1,
-      "table": [[0,456.0],[338,456.0],[675,458.0],[1013,460.0],[1350,460.7],[1688,461.1],[2025,461.1],[2363,459.3],[2700,457.9],[3038,457.7],[3375,457.5],[3713,457.2],[4050,456.8],[4388,456.4],[4725,455.9],[5063,455.3],[5400,454.7],[5738,454.0],[6075,453.3],[6224,452.9],[6413,452.5],[6750,451.7],[7088,450.8],[7169,450.6]]
-    },
-    {
-      "name": "Tail",
-      "maxMass": 3112,
-      "fillOrder": 3,
-      "burnOrder": 2,
-      "table": [[0,745.5],[330,745.5],[675,755.3],[1013,761.0],[1350,764.5],[1688,766.7],[2025,768.3],[2363,769.5],[2700,770.7],[3038,771.5],[3112,771.7]]
+      "table": [[0,-4.80],[500,-4.80],[1000,1.40],[1500,1.73],[2000,0.20],[2500,1.28],[3000,2.50],[3500,3.60],[4000,4.78],[4500,5.89],[5000,6.96],[5500,7.91],[6000,8.80],[6500,9.62],[7000,10.31],[7500,10.92],[8000,11.45],[8500,11.92],[9000,12.32],[9500,12.68],[10000,13.02],[10500,13.31],[11000,13.57],[11500,13.82],[12000,14.03],[12500,14.24],[13000,14.42],[13500,14.57],[14000,14.68],[14500,14.72],[15000,14.70],[15500,14.62],[16000,13.25],[16500,11.57],[17000,9.95],[17500,8.38],[18000,6.89],[18500,5.48],[19000,4.15],[19500,2.88],[20000,1.67],[20500,0.53],[21000,-0.63],[21500,-1.78],[22000,-2.15],[22500,-2.37],[23000,-2.50],[23500,-2.54],[24000,-2.50],[24500,-2.39],[25000,-2.21],[25500,-1.95],[26000,-1.65],[26500,-1.31],[27000,-0.96],[27500,-0.57],[28000,-0.16],[28500,0.28],[29000,0.70],[29500,-0.24],[30000,-0.43],[30500,-1.38],[31000,-0.88],[31500,-1.48],[32000,-1.46],[32500,-1.52],[33000,-0.77],[33500,-0.10],[33800,0.28]]
     }
   ]
 }

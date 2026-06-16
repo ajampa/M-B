@@ -11,7 +11,7 @@ import {
   computeLoadsheet,
 } from '../engine/massbalance.mjs';
 
-const aircraft = JSON.parse(await readFile(new URL('../engine/sample-aircraft.json', import.meta.url)));
+const aircraft = JSON.parse(await readFile(new URL('./fixture-aircraft.json', import.meta.url)));
 const V = JSON.parse(await readFile(new URL('./vectors.json', import.meta.url)));
 
 let pass = 0;
