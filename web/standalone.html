@@ -192,6 +192,15 @@ input.wide { width: 100%; text-align: left; }
 .seat:active { transform: scale(.94); }
 .seat .ic { font-size: 15px; font-weight: 700; line-height: 1; }
 .seat.empty .ic { font-size: 12px; font-weight: 600; color: var(--muted); }
+.seat-slot { width: 62px; height: 60px; flex: none; }
+/* seat back (headrest) on the rear edge indicates facing direction */
+.seat { position: relative; }
+.seat::after { content: ""; position: absolute; background: rgba(21,41,63,.32); border-radius: 3px; }
+.seat.face-up::after { left: 16px; right: 16px; bottom: 3px; height: 4px; }
+.seat.face-down::after { left: 16px; right: 16px; top: 3px; height: 4px; }
+.seat.face-left::after { top: 16px; bottom: 16px; right: 3px; width: 4px; }
+.seat.face-right::after { top: 16px; bottom: 16px; left: 3px; width: 4px; }
+.seat.empty::after { background: rgba(21,41,63,.14); }
 .seat .kg { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .seat .sid { position: absolute; }
 .seat.male { background: #e6edf5; border-color: #aebfd4; }
@@ -534,6 +543,41 @@ function envelopeStatus(aircraft, phaseKey, mass, pctMac) {
   };
 }
 
+// Like interpCurve but clamps to the end values instead of returning null when
+// the query is outside the charted range. Used for fuel-CG-limit schedules.
+function interpClamp(curve, x) {
+  const pts = [...curve].sort((p, q) => p[0] - q[0]);
+  if (x <= pts[0][0]) return pts[0][1];
+  if (x >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x0, v0] = pts[i];
+    const [x1, v1] = pts[i + 1];
+    if (x >= x0 && x <= x1) return x1 === x0 ? v0 : v0 + ((x - x0) / (x1 - x0)) * (v1 - v0);
+  }
+  return pts[pts.length - 1][1];
+}
+
+// Check each tank's fuel CG against its FWD/AFT tank-CG-limit schedule (arm vs
+// quantity). Tanks without limits are skipped. Returns the per-tank detail and
+// whether all limited tanks are inside.
+function tankLimitCheck(tanks, qtyMap) {
+  let checked = false;
+  let inside = true;
+  const detail = [];
+  for (const tk of tanks) {
+    if (!tk.fwdLimit || !tk.aftLimit) continue;
+    checked = true;
+    const qty = qtyMap[tk.name] || 0;
+    const arm = tankArm(tk, qty);
+    const fwd = interpClamp(tk.fwdLimit, qty);
+    const aft = interpClamp(tk.aftLimit, qty);
+    const ok = arm >= fwd - 1e-6 && arm <= aft + 1e-6;
+    if (!ok) inside = false;
+    detail.push({ name: tk.name, qty, arm, fwd, aft, inside: ok });
+  }
+  return { checked, inside, tanks: detail };
+}
+
 // Build a closed polygon ring [[pctMac, mass], ...] for drawing an envelope.
 function envelopePolygon(env) {
   const fwd = [...env.fwd].sort((a, b) => a[0] - b[0]); // mass ascending
@@ -699,8 +743,17 @@ function computeLoadsheet(aircraft, load) {
     ldm: envelopeStatus(aircraft, 'TOL', phases.ldm.mass, phases.ldm.pctMac),
   };
 
-  // In-flight burn path: sample CG as fuel drains from TOM down to LDM.
-  const burnPath = buildBurnPath(aircraft, zfm, tanks, fc);
+  // In-flight burn path (TOM -> LDM, the operational range) for the envelope
+  // verdict, plus a full fuel line (TOM -> ZFM, fuel down to zero) for drawing
+  // so the CG line connects all the way to the zero-fuel point.
+  const burnPath = buildFuelLine(aircraft, zfm, tanks, fc, fc.takeoff - fc.landing, 24);
+  const fuelLine = buildFuelLine(aircraft, zfm, tanks, fc, fc.takeoff, 40);
+
+  // Fuel-CG (tank schedule) limit checks at takeoff and landing fuel states.
+  const fuelLimits = {
+    takeoff: hasTanks ? tankLimitCheck(tanks, takeoffQty) : { checked: false, inside: true, tanks: [] },
+    landing: hasTanks ? tankLimitCheck(tanks, landingQty) : { checked: false, inside: true, tanks: [] },
+  };
 
   // Structural limit checks.
   const limits = {
@@ -713,10 +766,10 @@ function computeLoadsheet(aircraft, load) {
   const allOk =
     Object.values(limits).every((c) => c.ok !== false) &&
     Object.values(envelope).every((e) => e.inside) &&
-    burnPath.every((p) => p.status.inside) &&
+    burnPath.every((p) => p.status.inside && p.limit.inside) &&
     fc.sufficient;
 
-  return { phases, envelope, burnPath, limits, fuel: fc, ok: allOk };
+  return { phases, envelope, burnPath, fuelLine, fuelLimits, limits, fuel: fc, ok: allOk };
 }
 
 function toPoint(block) {
@@ -729,22 +782,26 @@ function armlessFuel(mass, aircraft) {
   return { mass, moment: mass * arm, arm };
 }
 
-// Sample the in-flight CG as the takeoff fuel is consumed in burn order, from
-// TOM (full takeoff fuel) down to LDM. Each sample uses the real per-tank
-// remaining quantity and fuel-arm table, so the path bends as tanks empty.
-function buildBurnPath(aircraft, zfm, tanks, fc) {
-  const steps = 24;
+// Sample the CG as takeoff fuel is consumed in burn order. Burns from 0 up to
+// `burnMax` (e.g. trip fuel for the operational path, or all takeoff fuel to
+// reach the zero-fuel point). Each sample uses the real per-tank remaining
+// quantity, fuel-arm table, envelope verdict and tank-CG-limit verdict.
+function buildFuelLine(aircraft, zfm, tanks, fc, burnMax, steps) {
   const hasTanks = tanks.length > 0;
   const takeoffQty = hasTanks ? fillTanks(tanks, fc.takeoff) : null;
-  const burnTotal = fc.takeoff - fc.landing;
   const path = [];
   for (let i = 0; i <= steps; i++) {
-    const burned = (i / steps) * burnTotal;
-    const fuel = hasTanks
-      ? tankStateMoment(tanks, burnTanks(tanks, takeoffQty, burned))
-      : armlessFuel(fc.takeoff - burned, aircraft);
+    const burned = (i / steps) * burnMax;
+    const qty = hasTanks ? burnTanks(tanks, takeoffQty, burned) : null;
+    const fuel = hasTanks ? tankStateMoment(tanks, qty) : armlessFuel(fc.takeoff - burned, aircraft);
     const pt = describe(toPoint(combine(zfm, fuel)), aircraft);
-    path.push({ ...pt, fuelRemaining: fc.takeoff - burned, status: envelopeStatus(aircraft, 'FLT', pt.mass, pt.pctMac) });
+    path.push({
+      ...pt,
+      fuelRemaining: fc.takeoff - burned,
+      fuelArm: fuel.arm,
+      status: envelopeStatus(aircraft, 'FLT', pt.mass, pt.pctMac),
+      limit: hasTanks ? tankLimitCheck(tanks, qty) : { checked: false, inside: true, tanks: [] },
+    });
   }
   return path;
 }
@@ -800,19 +857,19 @@ const DEFAULT_AIRCRAFT = {
       { "id": "pantryA", "label": "Forward galley", "mass": 300, "arm": -280.0, "_placeholder": true }
     ],
     "pax": [
-      { "id": "s1", "label": "1", "arm": -252.0, "row": 1, "rail": 1, "sect": "A" },
-      { "id": "s2", "label": "2", "arm": -252.0, "row": 1, "rail": 4, "sect": "A" },
-      { "id": "s3", "label": "3", "arm": -199.0, "row": 2, "rail": 1, "sect": "A" },
-      { "id": "s4", "label": "4", "arm": -199.0, "row": 2, "rail": 4, "sect": "A" },
-      { "id": "s5", "label": "5", "arm": -148.0, "row": 3, "rail": 1, "sect": "B" },
-      { "id": "s6", "label": "6", "arm": -148.0, "row": 3, "rail": 2, "sect": "B" },
-      { "id": "s7", "label": "7", "arm": -90.0, "row": 4, "rail": 1, "sect": "B" },
-      { "id": "s8", "label": "8", "arm": -90.0, "row": 4, "rail": 2, "sect": "B" },
-      { "id": "s9", "label": "9", "arm": -36.0, "row": 5, "rail": 1, "sect": "C" },
-      { "id": "s10", "label": "10", "arm": -34.0, "row": 6, "rail": 3, "sect": "C" },
-      { "id": "s11", "label": "11", "arm": -9.0, "row": 7, "rail": 3, "sect": "C" },
-      { "id": "s12", "label": "12", "arm": 16.0, "row": 8, "rail": 3, "sect": "C" },
-      { "id": "s13", "label": "13", "arm": 26.0, "row": 9, "rail": 1, "sect": "C" }
+      { "id": "s1", "label": "1", "arm": -252.0, "row": 1, "rail": 1, "sect": "A", "rot": "DOWN" },
+      { "id": "s2", "label": "2", "arm": -252.0, "row": 1, "rail": 4, "sect": "A", "rot": "DOWN" },
+      { "id": "s3", "label": "3", "arm": -199.0, "row": 2, "rail": 1, "sect": "A", "rot": "UP" },
+      { "id": "s4", "label": "4", "arm": -199.0, "row": 2, "rail": 4, "sect": "A", "rot": "UP" },
+      { "id": "s5", "label": "5", "arm": -148.0, "row": 3, "rail": 1, "sect": "B", "rot": "DOWN" },
+      { "id": "s6", "label": "6", "arm": -148.0, "row": 3, "rail": 2, "sect": "B", "rot": "DOWN" },
+      { "id": "s7", "label": "7", "arm": -90.0, "row": 4, "rail": 1, "sect": "B", "rot": "UP" },
+      { "id": "s8", "label": "8", "arm": -90.0, "row": 4, "rail": 2, "sect": "B", "rot": "UP" },
+      { "id": "s9", "label": "9", "arm": -36.0, "row": 5, "rail": 1, "sect": "C", "rot": "DOWN" },
+      { "id": "s10", "label": "10", "arm": -34.0, "row": 6, "rail": 3, "sect": "C", "rot": "LEFT" },
+      { "id": "s11", "label": "11", "arm": -9.0, "row": 7, "rail": 3, "sect": "C", "rot": "LEFT" },
+      { "id": "s12", "label": "12", "arm": 16.0, "row": 8, "rail": 3, "sect": "C", "rot": "LEFT" },
+      { "id": "s13", "label": "13", "arm": 26.0, "row": 9, "rail": 1, "sect": "C", "rot": "UP" }
     ],
     "cargo": [
       { "id": "fwdHold", "label": "Forward hold", "arm": -380.0, "maxMass": 1000, "_placeholder": true },
@@ -829,7 +886,9 @@ const DEFAULT_AIRCRAFT = {
       "minReserve": 200,
       "fillOrder": 1,
       "burnOrder": 1,
-      "table": [[0,-4.80],[500,-4.80],[1000,1.40],[1500,1.73],[2000,0.20],[2500,1.28],[3000,2.50],[3500,3.60],[4000,4.78],[4500,5.89],[5000,6.96],[5500,7.91],[6000,8.80],[6500,9.62],[7000,10.31],[7500,10.92],[8000,11.45],[8500,11.92],[9000,12.32],[9500,12.68],[10000,13.02],[10500,13.31],[11000,13.57],[11500,13.82],[12000,14.03],[12500,14.24],[13000,14.42],[13500,14.57],[14000,14.68],[14500,14.72],[15000,14.70],[15500,14.62],[16000,13.25],[16500,11.57],[17000,9.95],[17500,8.38],[18000,6.89],[18500,5.48],[19000,4.15],[19500,2.88],[20000,1.67],[20500,0.53],[21000,-0.63],[21500,-1.78],[22000,-2.15],[22500,-2.37],[23000,-2.50],[23500,-2.54],[24000,-2.50],[24500,-2.39],[25000,-2.21],[25500,-1.95],[26000,-1.65],[26500,-1.31],[27000,-0.96],[27500,-0.57],[28000,-0.16],[28500,0.28],[29000,0.70],[29500,-0.24],[30000,-0.43],[30500,-1.38],[31000,-0.88],[31500,-1.48],[32000,-1.46],[32500,-1.52],[33000,-0.77],[33500,-0.10],[33800,0.28]]
+      "table": [[0,-4.80],[500,-4.80],[1000,1.40],[1500,1.73],[2000,0.20],[2500,1.28],[3000,2.50],[3500,3.60],[4000,4.78],[4500,5.89],[5000,6.96],[5500,7.91],[6000,8.80],[6500,9.62],[7000,10.31],[7500,10.92],[8000,11.45],[8500,11.92],[9000,12.32],[9500,12.68],[10000,13.02],[10500,13.31],[11000,13.57],[11500,13.82],[12000,14.03],[12500,14.24],[13000,14.42],[13500,14.57],[14000,14.68],[14500,14.72],[15000,14.70],[15500,14.62],[16000,13.25],[16500,11.57],[17000,9.95],[17500,8.38],[18000,6.89],[18500,5.48],[19000,4.15],[19500,2.88],[20000,1.67],[20500,0.53],[21000,-0.63],[21500,-1.78],[22000,-2.15],[22500,-2.37],[23000,-2.50],[23500,-2.54],[24000,-2.50],[24500,-2.39],[25000,-2.21],[25500,-1.95],[26000,-1.65],[26500,-1.31],[27000,-0.96],[27500,-0.57],[28000,-0.16],[28500,0.28],[29000,0.70],[29500,-0.24],[30000,-0.43],[30500,-1.38],[31000,-0.88],[31500,-1.48],[32000,-1.46],[32500,-1.52],[33000,-0.77],[33500,-0.10],[33800,0.28]],
+      "fwdLimit": [[0,-48.220],[885,-48.220],[1770,-29.742],[2655,-26.133],[3541,-21.350],[4426,-17.603],[5311,-14.537],[6196,-12.108],[7081,-11.253],[7966,-10.550],[8852,-9.930],[9737,-9.410],[10622,-8.963],[11507,-8.563],[12392,-8.192],[13277,-7.835],[14162,-7.479],[15048,-7.116],[15933,-6.737],[16818,-6.336],[17703,-5.900],[18588,-5.429],[19473,-4.935],[20359,-4.411],[21244,-3.898],[22129,-4.538],[23014,-5.531],[23899,-6.041],[24784,-6.164],[25670,-6.086],[28325,-5.516],[30095,-6.345],[33800,-5.649]],
+      "aftLimit": [[0,94.620],[885,94.620],[1770,62.205],[2655,56.191],[3541,53.508],[4426,48.979],[5311,45.250],[6196,42.754],[7081,40.077],[7966,37.418],[8852,34.893],[9737,32.518],[10622,30.270],[11507,28.123],[12392,26.037],[13277,23.983],[14162,22.562],[15048,22.302],[15933,21.660],[16818,20.644],[23369,14.857],[30095,7.874],[33800,5.837]]
     }
   ]
 }
@@ -874,8 +933,8 @@ function renderEnvelopeSVG(aircraft, result, opts = {}) {
       <stop offset="1" stop-color="#1db954" stop-opacity="0.04"/>
     </linearGradient>
     <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="1" stdDeviation="1.4" flood-color="#0b1524" flood-opacity="0.25"/></filter>
-    <marker id="arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0L10 5L0 10z" fill="#b06a00"/></marker>
+    <marker id="arrow" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M1 1L11 6L1 11L3.4 6z" fill="#b06a00"/></marker>
   </defs>`);
   p.push(`<rect x="0" y="0" width="${W}" height="${H}" rx="12" fill="#fbfcfe"/>`);
   p.push(`<rect x="${m.left}" y="${m.top}" width="${iw}" height="${ih}" fill="#ffffff" stroke="#eef1f6"/>`);
@@ -900,11 +959,13 @@ function renderEnvelopeSVG(aircraft, result, opts = {}) {
   // Takeoff/landing envelope (filled, primary).
   p.push(`<polygon points="${ring(aircraft.envelopes.TOL)}" fill="url(#tolFill)" stroke="#1db954" stroke-width="2"/>`);
 
-  // Fuel-burn path: solid line that bends as tanks empty in burn order,
-  // arrow pointing from TOM (full) toward LDM (reserves only).
-  if (result?.burnPath?.length > 1) {
-    const d = result.burnPath.map((q, i) => `${i ? 'L' : 'M'}${sx(q.pctMac).toFixed(1)} ${sy(q.mass).toFixed(1)}`).join(' ');
-    p.push(`<path d="${d}" fill="none" stroke="#d98a14" stroke-width="2.2" stroke-linecap="round" marker-end="url(#arrow)"/>`);
+  // Fuel line: solid line of the CG locus as fuel burns from takeoff down to
+  // zero fuel (connects TOM through LDM all the way to ZFM). It bends as tanks
+  // empty in burn order. Arrow points in the burn direction (toward ZFM).
+  const line = result?.fuelLine?.length > 1 ? result.fuelLine : result?.burnPath;
+  if (line?.length > 1) {
+    const d = line.map((q, i) => `${i ? 'L' : 'M'}${sx(q.pctMac).toFixed(1)} ${sy(q.mass).toFixed(1)}`).join(' ');
+    p.push(`<path d="${d}" fill="none" stroke="#d98a14" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>`);
   }
 
   // Phase points + labels.
@@ -1080,27 +1141,27 @@ function renderPaxBrush() {
     host.appendChild(b);
   }
 }
-// Lay the cabin out fore-to-aft by row (rows ordered by their mean arm), and
-// within a row left-to-right by rail. Single seats are centred. So the visual
-// position follows each seat's arm.
+// Lay the cabin out fore-to-aft by row (rows ordered by mean arm). Each row is a
+// fixed grid of rail columns (1..maxRail), so a seat keeps its lateral rail
+// position even when it is the only seat in its row. Empty rails hold a spacer.
 function renderCabin() {
   const host = el('cabin'); host.innerHTML = '';
   const seats = aircraft.stations.pax || [];
+  if (!seats.length) { host.innerHTML = '<p class="hint">No seats. Add them in Dispatch &rsaquo; Cabin Seats.</p>'; el('paxCount').textContent = '0 pax'; return; }
   const rows = {};
   for (const s of seats) { const r = s.row ?? 0; (rows[r] = rows[r] || []).push(s); }
   const meanArm = (arr) => arr.reduce((a, s) => a + s.arm, 0) / arr.length;
   const order = Object.keys(rows).sort((a, b) => meanArm(rows[a]) - meanArm(rows[b]));
+  const maxRail = Math.max(2, ...seats.map((s) => s.rail || 1));
+  const aisleAfter = Math.floor(maxRail / 2);
   for (const r of order) {
-    const seatsR = rows[r].slice().sort((a, b) => (a.rail ?? 0) - (b.rail ?? 0));
+    const seatsR = rows[r];
     const rowEl = div('seatrow');
     rowEl.appendChild(spanCls('rownum', 'R' + r));
-    if (seatsR.length === 1) {
-      rowEl.appendChild(seatEl(seatsR[0]));
-    } else {
-      const mid = Math.ceil(seatsR.length / 2);
-      seatsR.slice(0, mid).forEach((s) => rowEl.appendChild(seatEl(s)));
-      rowEl.appendChild(spanCls('aisle', '·'));
-      seatsR.slice(mid).forEach((s) => rowEl.appendChild(seatEl(s)));
+    for (let rl = 1; rl <= maxRail; rl++) {
+      const s = seatsR.find((x) => (x.rail || 1) === rl);
+      rowEl.appendChild(s ? seatEl(s) : div('seat-slot'));
+      if (rl === aisleAfter) rowEl.appendChild(spanCls('aisle', '·'));
     }
     host.appendChild(rowEl);
   }
@@ -1108,7 +1169,8 @@ function renderCabin() {
 }
 function seatEl(s) {
   const type = state.pax[s.id] || '';
-  const d = div('seat ' + (type || 'empty'));
+  const face = s.rot ? ' face-' + String(s.rot).toLowerCase() : '';
+  const d = div('seat ' + (type || 'empty') + face);
   const tag = { male: 'M', female: 'F', child: 'C' }[type] || '';
   d.innerHTML = `<span class="ic">${type ? tag : (s.label ?? s.id)}</span><span class="kg">${type ? stdMassFor(type) + 'lb' : 'arm ' + s.arm}</span>`;
   d.onclick = () => {
@@ -1162,9 +1224,17 @@ function renderFuelDerived(r) {
   const f = r.fuel;
   const cell = (v, k, accent) => `<div class="readout ${accent ? 'accent' : ''}"><div class="v">${fmt(v)} <small>lb</small></div><div class="k">${k}</div></div>`;
   el('fuelDerived').innerHTML = cell(f.ramp, 'Ramp', 1) + cell(f.takeoff, 'Takeoff', 1) + cell(f.trip, 'Trip') + cell(f.landing, 'Landing');
-  el('fuelMsg').innerHTML = f.sufficient
+  let msg = f.sufficient
     ? pill('good', `Ramp ≥ minimum required (${fmt(f.requiredRamp)} lb)`)
     : pill('bad', `Ramp below minimum (${fmt(f.requiredRamp)} lb)`);
+  const fl = r.fuelLimits;
+  if (fl && fl.takeoff.checked) {
+    const ok = fl.takeoff.inside && fl.landing.inside;
+    const t = fl.takeoff.tanks[0];
+    const detail = t ? ` (CG ${t.arm.toFixed(1)} in vs ${t.fwd.toFixed(1)}…${t.aft.toFixed(1)})` : '';
+    msg += ' ' + (ok ? pill('good', 'Fuel CG within tank limits') : pill('bad', 'Fuel CG outside tank limits' + detail));
+  }
+  el('fuelMsg').innerHTML = msg;
 }
 function renderVerdict(r) {
   const v = el('verdict');
@@ -1172,6 +1242,7 @@ function renderVerdict(r) {
   const issues = [];
   for (const [k, e] of Object.entries(r.envelope)) if (!e.inside) issues.push(`${k.toUpperCase()} CG`);
   for (const [k, c] of Object.entries(r.limits)) if (c.ok === false) issues.push(`${k.toUpperCase()}`);
+  if (r.fuelLimits && r.fuelLimits.takeoff.checked && (!r.fuelLimits.takeoff.inside || !r.fuelLimits.landing.inside)) issues.push('Fuel CG');
   if (!r.fuel.sufficient) issues.push('Fuel');
   v.className = 'verdict-bar bad'; v.innerHTML = '⚠ Out of limits: ' + issues.join(' · ');
 }
@@ -1191,19 +1262,26 @@ function renderSeats() {
   const seats = aircraft.stations.pax || [];
   const rows = seats.map((s, i) =>
     `<tr>
-      <td><input data-i="${i}" data-k="label" value="${s.label ?? s.id}" style="width:58px"></td>
-      <td><input type="number" data-i="${i}" data-k="row" value="${s.row ?? 1}" style="width:54px"></td>
-      <td><input type="number" data-i="${i}" data-k="rail" value="${s.rail ?? 1}" style="width:54px"></td>
-      <td><input type="number" step="0.01" data-i="${i}" data-k="arm" value="${s.arm}" style="width:90px"></td>
+      <td><input data-i="${i}" data-k="label" value="${s.label ?? s.id}" style="width:52px"></td>
+      <td><input type="number" data-i="${i}" data-k="row" value="${s.row ?? 1}" style="width:50px"></td>
+      <td><input type="number" data-i="${i}" data-k="rail" value="${s.rail ?? 1}" style="width:50px"></td>
+      <td><input type="number" step="0.01" data-i="${i}" data-k="arm" value="${s.arm}" style="width:84px"></td>
+      <td><button class="btn small" data-rot="${i}" style="min-width:62px">${s.rot ?? 'UP'}</button></td>
       <td><button class="btn small ghost" data-del="${i}" style="color:var(--red)">✕</button></td>
     </tr>`).join('');
-  host.innerHTML = `<table class="vtable"><thead><tr><th>Label</th><th>Row</th><th>Rail</th><th>Arm (in)</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+  host.innerHTML = `<table class="vtable"><thead><tr><th>Label</th><th>Row</th><th>Rail</th><th>Arm (in)</th><th>Face</th><th></th></tr></thead><tbody>${rows}</tbody></table>
     <button class="btn small" id="addSeatBtn" style="margin-top:8px">+ Add seat</button>
-    <p class="hint">Row + rail set the cabin position; arm drives the CG. Seats render fore-to-aft by arm.</p>`;
+    <p class="hint">Row + rail set the cabin position; arm drives the CG; Face is the seat direction. Seats render fore-to-aft by arm.</p>`;
   host.querySelectorAll('input[data-i]').forEach((inp) => inp.oninput = () => {
     const s = aircraft.stations.pax[+inp.dataset.i]; const k = inp.dataset.k;
     s[k] = k === 'label' ? inp.value : Number(inp.value);
     save(); renderCabin(); recompute();
+  });
+  host.querySelectorAll('[data-rot]').forEach((b) => b.onclick = () => {
+    const s = aircraft.stations.pax[+b.dataset.rot];
+    const seq = ['UP', 'RIGHT', 'DOWN', 'LEFT'];
+    s.rot = seq[(seq.indexOf(s.rot ?? 'UP') + 1) % 4];
+    b.textContent = s.rot; save(); renderCabin();
   });
   host.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => {
     const s = aircraft.stations.pax[+b.dataset.del];

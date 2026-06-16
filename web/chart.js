@@ -35,8 +35,8 @@ export function renderEnvelopeSVG(aircraft, result, opts = {}) {
       <stop offset="1" stop-color="#1db954" stop-opacity="0.04"/>
     </linearGradient>
     <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="1" stdDeviation="1.4" flood-color="#0b1524" flood-opacity="0.25"/></filter>
-    <marker id="arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0L10 5L0 10z" fill="#b06a00"/></marker>
+    <marker id="arrow" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M1 1L11 6L1 11L3.4 6z" fill="#b06a00"/></marker>
   </defs>`);
   p.push(`<rect x="0" y="0" width="${W}" height="${H}" rx="12" fill="#fbfcfe"/>`);
   p.push(`<rect x="${m.left}" y="${m.top}" width="${iw}" height="${ih}" fill="#ffffff" stroke="#eef1f6"/>`);
@@ -61,11 +61,13 @@ export function renderEnvelopeSVG(aircraft, result, opts = {}) {
   // Takeoff/landing envelope (filled, primary).
   p.push(`<polygon points="${ring(aircraft.envelopes.TOL)}" fill="url(#tolFill)" stroke="#1db954" stroke-width="2"/>`);
 
-  // Fuel-burn path: solid line that bends as tanks empty in burn order,
-  // arrow pointing from TOM (full) toward LDM (reserves only).
-  if (result?.burnPath?.length > 1) {
-    const d = result.burnPath.map((q, i) => `${i ? 'L' : 'M'}${sx(q.pctMac).toFixed(1)} ${sy(q.mass).toFixed(1)}`).join(' ');
-    p.push(`<path d="${d}" fill="none" stroke="#d98a14" stroke-width="2.2" stroke-linecap="round" marker-end="url(#arrow)"/>`);
+  // Fuel line: solid line of the CG locus as fuel burns from takeoff down to
+  // zero fuel (connects TOM through LDM all the way to ZFM). It bends as tanks
+  // empty in burn order. Arrow points in the burn direction (toward ZFM).
+  const line = result?.fuelLine?.length > 1 ? result.fuelLine : result?.burnPath;
+  if (line?.length > 1) {
+    const d = line.map((q, i) => `${i ? 'L' : 'M'}${sx(q.pctMac).toFixed(1)} ${sy(q.mass).toFixed(1)}`).join(' ');
+    p.push(`<path d="${d}" fill="none" stroke="#d98a14" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>`);
   }
 
   // Phase points + labels.

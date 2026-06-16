@@ -182,6 +182,15 @@ input.wide { width: 100%; text-align: left; }
 .seat:active { transform: scale(.94); }
 .seat .ic { font-size: 15px; font-weight: 700; line-height: 1; }
 .seat.empty .ic { font-size: 12px; font-weight: 600; color: var(--muted); }
+.seat-slot { width: 62px; height: 60px; flex: none; }
+/* seat back (headrest) on the rear edge indicates facing direction */
+.seat { position: relative; }
+.seat::after { content: ""; position: absolute; background: rgba(21,41,63,.32); border-radius: 3px; }
+.seat.face-up::after { left: 16px; right: 16px; bottom: 3px; height: 4px; }
+.seat.face-down::after { left: 16px; right: 16px; top: 3px; height: 4px; }
+.seat.face-left::after { top: 16px; bottom: 16px; right: 3px; width: 4px; }
+.seat.face-right::after { top: 16px; bottom: 16px; left: 3px; width: 4px; }
+.seat.empty::after { background: rgba(21,41,63,.14); }
 .seat .kg { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .seat .sid { position: absolute; }
 .seat.male { background: #e6edf5; border-color: #aebfd4; }

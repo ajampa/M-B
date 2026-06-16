@@ -109,6 +109,41 @@ export function envelopeStatus(aircraft, phaseKey, mass, pctMac) {
   };
 }
 
+// Like interpCurve but clamps to the end values instead of returning null when
+// the query is outside the charted range. Used for fuel-CG-limit schedules.
+export function interpClamp(curve, x) {
+  const pts = [...curve].sort((p, q) => p[0] - q[0]);
+  if (x <= pts[0][0]) return pts[0][1];
+  if (x >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x0, v0] = pts[i];
+    const [x1, v1] = pts[i + 1];
+    if (x >= x0 && x <= x1) return x1 === x0 ? v0 : v0 + ((x - x0) / (x1 - x0)) * (v1 - v0);
+  }
+  return pts[pts.length - 1][1];
+}
+
+// Check each tank's fuel CG against its FWD/AFT tank-CG-limit schedule (arm vs
+// quantity). Tanks without limits are skipped. Returns the per-tank detail and
+// whether all limited tanks are inside.
+export function tankLimitCheck(tanks, qtyMap) {
+  let checked = false;
+  let inside = true;
+  const detail = [];
+  for (const tk of tanks) {
+    if (!tk.fwdLimit || !tk.aftLimit) continue;
+    checked = true;
+    const qty = qtyMap[tk.name] || 0;
+    const arm = tankArm(tk, qty);
+    const fwd = interpClamp(tk.fwdLimit, qty);
+    const aft = interpClamp(tk.aftLimit, qty);
+    const ok = arm >= fwd - 1e-6 && arm <= aft + 1e-6;
+    if (!ok) inside = false;
+    detail.push({ name: tk.name, qty, arm, fwd, aft, inside: ok });
+  }
+  return { checked, inside, tanks: detail };
+}
+
 // Build a closed polygon ring [[pctMac, mass], ...] for drawing an envelope.
 export function envelopePolygon(env) {
   const fwd = [...env.fwd].sort((a, b) => a[0] - b[0]); // mass ascending
@@ -274,8 +309,17 @@ export function computeLoadsheet(aircraft, load) {
     ldm: envelopeStatus(aircraft, 'TOL', phases.ldm.mass, phases.ldm.pctMac),
   };
 
-  // In-flight burn path: sample CG as fuel drains from TOM down to LDM.
-  const burnPath = buildBurnPath(aircraft, zfm, tanks, fc);
+  // In-flight burn path (TOM -> LDM, the operational range) for the envelope
+  // verdict, plus a full fuel line (TOM -> ZFM, fuel down to zero) for drawing
+  // so the CG line connects all the way to the zero-fuel point.
+  const burnPath = buildFuelLine(aircraft, zfm, tanks, fc, fc.takeoff - fc.landing, 24);
+  const fuelLine = buildFuelLine(aircraft, zfm, tanks, fc, fc.takeoff, 40);
+
+  // Fuel-CG (tank schedule) limit checks at takeoff and landing fuel states.
+  const fuelLimits = {
+    takeoff: hasTanks ? tankLimitCheck(tanks, takeoffQty) : { checked: false, inside: true, tanks: [] },
+    landing: hasTanks ? tankLimitCheck(tanks, landingQty) : { checked: false, inside: true, tanks: [] },
+  };
 
   // Structural limit checks.
   const limits = {
@@ -288,10 +332,10 @@ export function computeLoadsheet(aircraft, load) {
   const allOk =
     Object.values(limits).every((c) => c.ok !== false) &&
     Object.values(envelope).every((e) => e.inside) &&
-    burnPath.every((p) => p.status.inside) &&
+    burnPath.every((p) => p.status.inside && p.limit.inside) &&
     fc.sufficient;
 
-  return { phases, envelope, burnPath, limits, fuel: fc, ok: allOk };
+  return { phases, envelope, burnPath, fuelLine, fuelLimits, limits, fuel: fc, ok: allOk };
 }
 
 function toPoint(block) {
@@ -304,22 +348,26 @@ function armlessFuel(mass, aircraft) {
   return { mass, moment: mass * arm, arm };
 }
 
-// Sample the in-flight CG as the takeoff fuel is consumed in burn order, from
-// TOM (full takeoff fuel) down to LDM. Each sample uses the real per-tank
-// remaining quantity and fuel-arm table, so the path bends as tanks empty.
-function buildBurnPath(aircraft, zfm, tanks, fc) {
-  const steps = 24;
+// Sample the CG as takeoff fuel is consumed in burn order. Burns from 0 up to
+// `burnMax` (e.g. trip fuel for the operational path, or all takeoff fuel to
+// reach the zero-fuel point). Each sample uses the real per-tank remaining
+// quantity, fuel-arm table, envelope verdict and tank-CG-limit verdict.
+function buildFuelLine(aircraft, zfm, tanks, fc, burnMax, steps) {
   const hasTanks = tanks.length > 0;
   const takeoffQty = hasTanks ? fillTanks(tanks, fc.takeoff) : null;
-  const burnTotal = fc.takeoff - fc.landing;
   const path = [];
   for (let i = 0; i <= steps; i++) {
-    const burned = (i / steps) * burnTotal;
-    const fuel = hasTanks
-      ? tankStateMoment(tanks, burnTanks(tanks, takeoffQty, burned))
-      : armlessFuel(fc.takeoff - burned, aircraft);
+    const burned = (i / steps) * burnMax;
+    const qty = hasTanks ? burnTanks(tanks, takeoffQty, burned) : null;
+    const fuel = hasTanks ? tankStateMoment(tanks, qty) : armlessFuel(fc.takeoff - burned, aircraft);
     const pt = describe(toPoint(combine(zfm, fuel)), aircraft);
-    path.push({ ...pt, fuelRemaining: fc.takeoff - burned, status: envelopeStatus(aircraft, 'FLT', pt.mass, pt.pctMac) });
+    path.push({
+      ...pt,
+      fuelRemaining: fc.takeoff - burned,
+      fuelArm: fuel.arm,
+      status: envelopeStatus(aircraft, 'FLT', pt.mass, pt.pctMac),
+      limit: hasTanks ? tankLimitCheck(tanks, qty) : { checked: false, inside: true, tanks: [] },
+    });
   }
   return path;
 }

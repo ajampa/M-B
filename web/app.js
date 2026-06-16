@@ -138,27 +138,27 @@ function renderPaxBrush() {
     host.appendChild(b);
   }
 }
-// Lay the cabin out fore-to-aft by row (rows ordered by their mean arm), and
-// within a row left-to-right by rail. Single seats are centred. So the visual
-// position follows each seat's arm.
+// Lay the cabin out fore-to-aft by row (rows ordered by mean arm). Each row is a
+// fixed grid of rail columns (1..maxRail), so a seat keeps its lateral rail
+// position even when it is the only seat in its row. Empty rails hold a spacer.
 function renderCabin() {
   const host = el('cabin'); host.innerHTML = '';
   const seats = aircraft.stations.pax || [];
+  if (!seats.length) { host.innerHTML = '<p class="hint">No seats. Add them in Dispatch &rsaquo; Cabin Seats.</p>'; el('paxCount').textContent = '0 pax'; return; }
   const rows = {};
   for (const s of seats) { const r = s.row ?? 0; (rows[r] = rows[r] || []).push(s); }
   const meanArm = (arr) => arr.reduce((a, s) => a + s.arm, 0) / arr.length;
   const order = Object.keys(rows).sort((a, b) => meanArm(rows[a]) - meanArm(rows[b]));
+  const maxRail = Math.max(2, ...seats.map((s) => s.rail || 1));
+  const aisleAfter = Math.floor(maxRail / 2);
   for (const r of order) {
-    const seatsR = rows[r].slice().sort((a, b) => (a.rail ?? 0) - (b.rail ?? 0));
+    const seatsR = rows[r];
     const rowEl = div('seatrow');
     rowEl.appendChild(spanCls('rownum', 'R' + r));
-    if (seatsR.length === 1) {
-      rowEl.appendChild(seatEl(seatsR[0]));
-    } else {
-      const mid = Math.ceil(seatsR.length / 2);
-      seatsR.slice(0, mid).forEach((s) => rowEl.appendChild(seatEl(s)));
-      rowEl.appendChild(spanCls('aisle', '·'));
-      seatsR.slice(mid).forEach((s) => rowEl.appendChild(seatEl(s)));
+    for (let rl = 1; rl <= maxRail; rl++) {
+      const s = seatsR.find((x) => (x.rail || 1) === rl);
+      rowEl.appendChild(s ? seatEl(s) : div('seat-slot'));
+      if (rl === aisleAfter) rowEl.appendChild(spanCls('aisle', '·'));
     }
     host.appendChild(rowEl);
   }
@@ -166,7 +166,8 @@ function renderCabin() {
 }
 function seatEl(s) {
   const type = state.pax[s.id] || '';
-  const d = div('seat ' + (type || 'empty'));
+  const face = s.rot ? ' face-' + String(s.rot).toLowerCase() : '';
+  const d = div('seat ' + (type || 'empty') + face);
   const tag = { male: 'M', female: 'F', child: 'C' }[type] || '';
   d.innerHTML = `<span class="ic">${type ? tag : (s.label ?? s.id)}</span><span class="kg">${type ? stdMassFor(type) + 'lb' : 'arm ' + s.arm}</span>`;
   d.onclick = () => {
@@ -220,9 +221,17 @@ function renderFuelDerived(r) {
   const f = r.fuel;
   const cell = (v, k, accent) => `<div class="readout ${accent ? 'accent' : ''}"><div class="v">${fmt(v)} <small>lb</small></div><div class="k">${k}</div></div>`;
   el('fuelDerived').innerHTML = cell(f.ramp, 'Ramp', 1) + cell(f.takeoff, 'Takeoff', 1) + cell(f.trip, 'Trip') + cell(f.landing, 'Landing');
-  el('fuelMsg').innerHTML = f.sufficient
+  let msg = f.sufficient
     ? pill('good', `Ramp ≥ minimum required (${fmt(f.requiredRamp)} lb)`)
     : pill('bad', `Ramp below minimum (${fmt(f.requiredRamp)} lb)`);
+  const fl = r.fuelLimits;
+  if (fl && fl.takeoff.checked) {
+    const ok = fl.takeoff.inside && fl.landing.inside;
+    const t = fl.takeoff.tanks[0];
+    const detail = t ? ` (CG ${t.arm.toFixed(1)} in vs ${t.fwd.toFixed(1)}…${t.aft.toFixed(1)})` : '';
+    msg += ' ' + (ok ? pill('good', 'Fuel CG within tank limits') : pill('bad', 'Fuel CG outside tank limits' + detail));
+  }
+  el('fuelMsg').innerHTML = msg;
 }
 function renderVerdict(r) {
   const v = el('verdict');
@@ -230,6 +239,7 @@ function renderVerdict(r) {
   const issues = [];
   for (const [k, e] of Object.entries(r.envelope)) if (!e.inside) issues.push(`${k.toUpperCase()} CG`);
   for (const [k, c] of Object.entries(r.limits)) if (c.ok === false) issues.push(`${k.toUpperCase()}`);
+  if (r.fuelLimits && r.fuelLimits.takeoff.checked && (!r.fuelLimits.takeoff.inside || !r.fuelLimits.landing.inside)) issues.push('Fuel CG');
   if (!r.fuel.sufficient) issues.push('Fuel');
   v.className = 'verdict-bar bad'; v.innerHTML = '⚠ Out of limits: ' + issues.join(' · ');
 }
@@ -249,19 +259,26 @@ function renderSeats() {
   const seats = aircraft.stations.pax || [];
   const rows = seats.map((s, i) =>
     `<tr>
-      <td><input data-i="${i}" data-k="label" value="${s.label ?? s.id}" style="width:58px"></td>
-      <td><input type="number" data-i="${i}" data-k="row" value="${s.row ?? 1}" style="width:54px"></td>
-      <td><input type="number" data-i="${i}" data-k="rail" value="${s.rail ?? 1}" style="width:54px"></td>
-      <td><input type="number" step="0.01" data-i="${i}" data-k="arm" value="${s.arm}" style="width:90px"></td>
+      <td><input data-i="${i}" data-k="label" value="${s.label ?? s.id}" style="width:52px"></td>
+      <td><input type="number" data-i="${i}" data-k="row" value="${s.row ?? 1}" style="width:50px"></td>
+      <td><input type="number" data-i="${i}" data-k="rail" value="${s.rail ?? 1}" style="width:50px"></td>
+      <td><input type="number" step="0.01" data-i="${i}" data-k="arm" value="${s.arm}" style="width:84px"></td>
+      <td><button class="btn small" data-rot="${i}" style="min-width:62px">${s.rot ?? 'UP'}</button></td>
       <td><button class="btn small ghost" data-del="${i}" style="color:var(--red)">✕</button></td>
     </tr>`).join('');
-  host.innerHTML = `<table class="vtable"><thead><tr><th>Label</th><th>Row</th><th>Rail</th><th>Arm (in)</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+  host.innerHTML = `<table class="vtable"><thead><tr><th>Label</th><th>Row</th><th>Rail</th><th>Arm (in)</th><th>Face</th><th></th></tr></thead><tbody>${rows}</tbody></table>
     <button class="btn small" id="addSeatBtn" style="margin-top:8px">+ Add seat</button>
-    <p class="hint">Row + rail set the cabin position; arm drives the CG. Seats render fore-to-aft by arm.</p>`;
+    <p class="hint">Row + rail set the cabin position; arm drives the CG; Face is the seat direction. Seats render fore-to-aft by arm.</p>`;
   host.querySelectorAll('input[data-i]').forEach((inp) => inp.oninput = () => {
     const s = aircraft.stations.pax[+inp.dataset.i]; const k = inp.dataset.k;
     s[k] = k === 'label' ? inp.value : Number(inp.value);
     save(); renderCabin(); recompute();
+  });
+  host.querySelectorAll('[data-rot]').forEach((b) => b.onclick = () => {
+    const s = aircraft.stations.pax[+b.dataset.rot];
+    const seq = ['UP', 'RIGHT', 'DOWN', 'LEFT'];
+    s.rot = seq[(seq.indexOf(s.rot ?? 'UP') + 1) % 4];
+    b.textContent = s.rot; save(); renderCabin();
   });
   host.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => {
     const s = aircraft.stations.pax[+b.dataset.del];
