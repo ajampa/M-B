@@ -2,121 +2,156 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <title>M&B Calculator — Prototype</title>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#eef1f6" />
+  <title>Trim — Mass &amp; Balance</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header>
+<div class="app-frame">
+  <div class="appbar">
+    <div class="mark">M&amp;B</div>
     <div>
-      <h1>Mass &amp; Balance</h1>
-      <div class="sub" id="acName">—</div>
+      <div class="title">Trim</div>
+      <div class="reg" id="acReg">—</div>
     </div>
-    <div class="tabs">
-      <button class="tab active" data-view="pilot">Pilot / Load</button>
-      <button class="tab" data-view="config">Configure Aircraft</button>
+    <div class="spacer"></div>
+    <div class="flightpick" id="flightPick">
+      <span>Flight</span><b id="flightNo">TRM-204</b><span>·</span><span id="flightRoute">ESSA→EGLL</span>
     </div>
-  </header>
-
-  <!-- PILOT VIEW -->
-  <div id="view-pilot" class="layout">
-    <div class="col-main">
-      <div class="card" id="card-basic">
-        <h2>Aircraft &amp; Basic Mass</h2>
-        <div class="row"><label>Basic Mass (lb)</label><input type="number" id="basicMass" /></div>
-        <div class="row"><label>Basic Arm (in)</label><input type="number" id="basicArm" step="0.01" /></div>
-        <p class="hint">Dry Operating Mass builds from here + crew + pantry.</p>
-      </div>
-
-      <div class="card" id="card-crew"><h2>Crew</h2><div id="crewList"></div></div>
-
-      <div class="card" id="card-pantry">
-        <h2>Pantry</h2>
-        <div class="toggle-row" id="pantryChips"></div>
-      </div>
-
-      <div class="card" id="card-pax">
-        <h2>Passengers <span class="badge" id="paxCount"></span></h2>
-        <p class="hint">Tap a seat to cycle: empty → male → female → child → empty.</p>
-        <div class="seatmap" id="seatmap"></div>
-      </div>
-
-      <div class="card" id="card-cargo"><h2>Cargo</h2><div id="cargoList"></div></div>
-
-      <div class="card" id="card-fuel">
-        <h2>Fuel</h2>
-        <div id="fuelInputs"></div>
-        <div class="bignum" id="fuelDerived"></div>
-        <p class="hint" id="fuelMsg"></p>
-      </div>
-    </div>
-
-    <div class="col-side">
-      <div class="sticky-right">
-        <div class="card summary" id="card-summary">
-          <h2>Loadsheet <span class="badge" id="overallBadge"></span></h2>
-          <table>
-            <thead><tr><th>Phase</th><th>Mass</th><th>%MAC</th><th>Index</th><th>Limit</th><th>Env</th></tr></thead>
-            <tbody id="summaryBody"></tbody>
-          </table>
-        </div>
-        <div class="chart-wrap">
-          <div id="chart"></div>
-          <div class="verdict" id="verdict"></div>
-        </div>
-      </div>
-    </div>
+    <span id="overallBadge"></span>
   </div>
 
-  <!-- CONFIG VIEW -->
-  <div id="view-config" class="layout hidden">
-    <div class="col-main">
-      <div class="card">
-        <h2>Index System</h2>
-        <div class="grid2">
-          <div class="row"><label>Reference STA</label><input type="number" id="cfg_sta" step="0.001" /></div>
-          <div class="row"><label>Scale (K)</label><input type="number" id="cfg_scale" /></div>
-          <div class="row"><label>Offset</label><input type="number" id="cfg_offset" /></div>
-        </div>
-        <p class="hint">Index = Mass × (Arm − STA) / Scale + Offset</p>
-      </div>
-      <div class="card">
-        <h2>MAC</h2>
-        <div class="grid2">
-          <div class="row"><label>LEMAC (in)</label><input type="number" id="cfg_lemac" step="0.001" /></div>
-          <div class="row"><label>MAC length (in)</label><input type="number" id="cfg_maclen" step="0.001" /></div>
-        </div>
-        <p class="hint">%MAC = (Arm − LEMAC) / MACLEN × 100</p>
-      </div>
-      <div class="card">
-        <h2>Structural Limits (lb)</h2>
-        <div class="grid2">
-          <div class="row"><label>MRW</label><input type="number" id="cfg_mrw" /></div>
-          <div class="row"><label>MTOM</label><input type="number" id="cfg_mtom" /></div>
-          <div class="row"><label>MZFM</label><input type="number" id="cfg_mzfm" /></div>
-          <div class="row"><label>MLM</label><input type="number" id="cfg_mlm" /></div>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Import legacy XML</h2>
-        <p class="hint">Paste &lt;INDEX&gt;/&lt;MAC&gt;/&lt;FWDCG…&gt;/&lt;AFTCG…&gt; tags to bootstrap, then edit cleanly above and below.</p>
-        <textarea id="xmlIn" placeholder="<INDEX STA=&quot;514&quot; SCALE=&quot;11000&quot; OFFSET=&quot;55&quot;/> ..."></textarea>
-        <div style="margin-top:8px"><button class="btn primary" id="xmlImport">Import</button>
-          <button class="btn" id="resetDefault">Reset to sample</button></div>
-      </div>
-    </div>
-    <div class="col-side">
-      <div class="sticky-right">
+  <div class="app-body">
+    <nav class="sidebar" id="nav"></nav>
+
+    <main class="content">
+      <!-- FLIGHT & BASIC -->
+      <section class="panel" id="panel-flight">
         <div class="card">
-          <h2>CG Envelope</h2>
+          <div class="card-head"><h2>Flight</h2><div class="sub">Trip details</div></div>
+          <div class="field"><div class="label"><div class="t">Flight number</div></div><input type="text" id="fl_no" /></div>
+          <div class="field"><div class="label"><div class="t">Route</div><div class="h">Departure → Destination</div></div><input type="text" id="fl_route" /></div>
+          <div class="field"><div class="label"><div class="t">Alternate</div></div><input type="text" id="fl_alt" /></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Basic Mass &amp; Arm</h2><div class="sub">From weighing report</div></div>
+          <div class="field"><div class="label"><div class="t">Basic Mass</div><div class="h">Empty weighed mass (BM)</div></div><input type="number" id="basicMass" /><span class="unit">lb</span></div>
+          <div class="field"><div class="label"><div class="t">Basic Arm</div><div class="h">Basic CG arm (BARM)</div></div><input type="number" id="basicArm" step="0.01" /><span class="unit">in</span></div>
+          <p class="hint">Dry Operating Mass builds from here + crew + pantry.</p>
+        </div>
+      </section>
+
+      <!-- CREW -->
+      <section class="panel" id="panel-crew">
+        <div class="card">
+          <div class="card-head"><h2>Crew</h2><div class="sub">Flight &amp; cabin crew</div></div>
+          <div id="crewList"></div>
+        </div>
+      </section>
+
+      <!-- PANTRY -->
+      <section class="panel" id="panel-pantry">
+        <div class="card">
+          <div class="card-head"><h2>Pantry</h2><div class="sub">Catering fits</div></div>
+          <div id="pantryList"></div>
+        </div>
+      </section>
+
+      <!-- PASSENGERS -->
+      <section class="panel" id="panel-pax">
+        <div class="card">
+          <div class="card-head"><h2>Passengers</h2><div class="right"><span class="pill blue flat" id="paxCount">0 pax</span></div></div>
+          <div class="seg" id="paxBrush" style="margin-bottom:14px"></div>
+          <div class="cabin" id="cabin"></div>
+          <p class="hint">Pick a category above, then tap seats to fill them. Tapping a filled seat clears it.</p>
+        </div>
+      </section>
+
+      <!-- CARGO -->
+      <section class="panel" id="panel-cargo">
+        <div class="card">
+          <div class="card-head"><h2>Cargo</h2><div class="sub">Holds &amp; compartments</div></div>
+          <div id="cargoList"></div>
+        </div>
+      </section>
+
+      <!-- FUEL -->
+      <section class="panel" id="panel-fuel">
+        <div class="card">
+          <div class="card-head"><h2>Fuel Plan</h2><div class="sub">EASA fuel chain</div></div>
+          <div id="fuelInputs"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Derived</h2></div>
+          <div class="readouts" id="fuelDerived"></div>
+          <div id="fuelMsg" style="margin-top:12px"></div>
+        </div>
+      </section>
+
+      <!-- CONFIG -->
+      <section class="panel" id="panel-config">
+        <div class="card">
+          <div class="card-head"><h2>Index System</h2></div>
+          <div class="grid2">
+            <div class="field"><div class="label"><div class="t">Reference STA</div></div><input type="number" id="cfg_sta" step="0.001" /></div>
+            <div class="field"><div class="label"><div class="t">Scale (K)</div></div><input type="number" id="cfg_scale" /></div>
+            <div class="field"><div class="label"><div class="t">Offset</div></div><input type="number" id="cfg_offset" /></div>
+          </div>
+          <p class="hint">Index = Mass × (Arm − STA) / Scale + Offset</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>MAC</h2></div>
+          <div class="grid2">
+            <div class="field"><div class="label"><div class="t">LEMAC</div></div><input type="number" id="cfg_lemac" step="0.001" /><span class="unit">in</span></div>
+            <div class="field"><div class="label"><div class="t">MAC length</div></div><input type="number" id="cfg_maclen" step="0.001" /><span class="unit">in</span></div>
+          </div>
+          <p class="hint">%MAC = (Arm − LEMAC) / MACLEN × 100</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Structural Limits</h2><div class="sub">lb</div></div>
+          <div class="grid2">
+            <div class="field"><div class="label"><div class="t">MRW</div></div><input type="number" id="cfg_mrw" /></div>
+            <div class="field"><div class="label"><div class="t">MTOM</div></div><input type="number" id="cfg_mtom" /></div>
+            <div class="field"><div class="label"><div class="t">MZFM</div></div><input type="number" id="cfg_mzfm" /></div>
+            <div class="field"><div class="label"><div class="t">MLM</div></div><input type="number" id="cfg_mlm" /></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>CG Envelope</h2><div class="sub">vertices · mass / %MAC</div></div>
           <div id="envEditors"></div>
         </div>
-        <div class="chart-wrap"><div id="chartCfg"></div></div>
-      </div>
-    </div>
-  </div>
+        <div class="card">
+          <div class="card-head"><h2>Import legacy XML</h2></div>
+          <p class="hint">Paste &lt;INDEX&gt; / &lt;MAC&gt; / &lt;FWDCG…&gt; / &lt;AFTCG…&gt; tags to bootstrap a new aircraft.</p>
+          <textarea id="xmlIn" placeholder='<INDEX STA="514" SCALE="11000" OFFSET="55"/> ...'></textarea>
+          <div style="margin-top:10px; display:flex; gap:10px">
+            <button class="btn primary" id="xmlImport">Import</button>
+            <button class="btn ghost" id="resetDefault">Reset to sample</button>
+          </div>
+        </div>
+      </section>
+    </main>
 
-  <script type="module" src="app.js"></script>
+    <aside class="side">
+      <div class="card loadsheet" id="loadsheetCard">
+        <div class="card-head"><h2>Loadsheet</h2><div class="right" id="loadsheetTime"></div></div>
+        <table>
+          <thead><tr><th>Phase</th><th>Mass</th><th>%MAC</th><th>Index</th><th>Status</th></tr></thead>
+          <tbody id="summaryBody"></tbody>
+        </table>
+      </div>
+      <div class="card chart-card">
+        <div class="card-head"><h2>CG Envelope</h2><div class="right"><span class="pill blue flat" id="chartLegend">TOL · FLT</span></div></div>
+        <div id="chart"></div>
+        <div class="verdict-bar" id="verdict"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script type="module" src="app.js"></script>
 </body>
 </html>

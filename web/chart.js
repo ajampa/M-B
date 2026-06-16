@@ -1,88 +1,95 @@
 // SVG CG-envelope renderer. Framework-free string builder so it works both in
-// the browser (innerHTML) and in Node (write to .svg file for visual proof).
+// the browser (innerHTML) and in Node (write to .svg for a visual proof).
 // x-axis = %MAC, y-axis = mass.
 
 import { envelopePolygon } from '../engine/massbalance.mjs';
 
 const PHASE_STYLE = {
-  zfm: { color: '#2563eb', label: 'ZFM' },
-  tom: { color: '#16a34a', label: 'TOM' },
-  ldm: { color: '#d97706', label: 'LDM' },
+  zfm: { color: '#0a84ff', label: 'ZFM' },
+  tom: { color: '#1db954', label: 'TOM' },
+  ldm: { color: '#ff9f0a', label: 'LDM' },
 };
 
 export function renderEnvelopeSVG(aircraft, result, opts = {}) {
-  const W = opts.width || 640;
-  const H = opts.height || 460;
-  const m = { top: 24, right: 20, bottom: 48, left: 64 };
+  const W = opts.width || 460;
+  const H = opts.height || 380;
+  const m = { top: 22, right: 16, bottom: 42, left: 52 };
   const iw = W - m.left - m.right;
   const ih = H - m.top - m.bottom;
 
-  // Data bounds from both envelopes (+ a little padding).
   const allPts = ['TOL', 'FLT'].flatMap((k) => [...aircraft.envelopes[k].fwd, ...aircraft.envelopes[k].aft]);
   const xs = allPts.map((p) => p[1]);
   const ys = allPts.map((p) => p[0]);
-  const xMin = Math.min(...xs) - 2;
-  const xMax = Math.max(...xs) + 2;
+  const xMin = Math.min(...xs) - 2.5;
+  const xMax = Math.max(...xs) + 2.5;
   const yMin = Math.min(...ys) - 1500;
   const yMax = Math.max(...ys) + 1500;
-
   const sx = (pct) => m.left + ((pct - xMin) / (xMax - xMin)) * iw;
   const sy = (mass) => m.top + ih - ((mass - yMin) / (yMax - yMin)) * ih;
 
-  const parts = [];
-  parts.push(`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,sans-serif">`);
-  parts.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>`);
+  const p = [];
+  p.push(`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,SF Pro Text,Segoe UI,Roboto,sans-serif">`);
+  p.push(`<defs>
+    <linearGradient id="tolFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1db954" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#1db954" stop-opacity="0.04"/>
+    </linearGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="1" stdDeviation="1.4" flood-color="#0b1524" flood-opacity="0.25"/></filter>
+  </defs>`);
+  p.push(`<rect x="0" y="0" width="${W}" height="${H}" rx="12" fill="#fbfcfe"/>`);
+  p.push(`<rect x="${m.left}" y="${m.top}" width="${iw}" height="${ih}" fill="#ffffff" stroke="#eef1f6"/>`);
 
-  // Gridlines + axis labels.
+  // Gridlines + ticks.
   for (let pct = Math.ceil(xMin / 5) * 5; pct <= xMax; pct += 5) {
     const x = sx(pct);
-    parts.push(`<line x1="${x}" y1="${m.top}" x2="${x}" y2="${m.top + ih}" stroke="#eef0f3"/>`);
-    parts.push(`<text x="${x}" y="${m.top + ih + 18}" font-size="11" fill="#6b7280" text-anchor="middle">${pct}</text>`);
+    p.push(`<line x1="${x}" y1="${m.top}" x2="${x}" y2="${m.top + ih}" stroke="#f1f4f9"/>`);
+    p.push(`<text x="${x}" y="${m.top + ih + 16}" font-size="10.5" fill="#8a94a6" text-anchor="middle">${pct}</text>`);
   }
-  const massStep = 4000;
-  for (let mass = Math.ceil(yMin / massStep) * massStep; mass <= yMax; mass += massStep) {
+  for (let mass = Math.ceil(yMin / 4000) * 4000; mass <= yMax; mass += 4000) {
     const y = sy(mass);
-    parts.push(`<line x1="${m.left}" y1="${y}" x2="${m.left + iw}" y2="${y}" stroke="#eef0f3"/>`);
-    parts.push(`<text x="${m.left - 8}" y="${y + 4}" font-size="11" fill="#6b7280" text-anchor="end">${(mass / 1000)}k</text>`);
+    p.push(`<line x1="${m.left}" y1="${y}" x2="${m.left + iw}" y2="${y}" stroke="#f1f4f9"/>`);
+    p.push(`<text x="${m.left - 7}" y="${y + 3.5}" font-size="10.5" fill="#8a94a6" text-anchor="end">${mass / 1000}k</text>`);
   }
-  parts.push(`<text x="${m.left + iw / 2}" y="${H - 8}" font-size="12" fill="#374151" text-anchor="middle">CG (% MAC)</text>`);
-  parts.push(`<text transform="translate(16 ${m.top + ih / 2}) rotate(-90)" font-size="12" fill="#374151" text-anchor="middle">Mass (lb)</text>`);
+  p.push(`<text x="${m.left + iw / 2}" y="${H - 6}" font-size="11" fill="#5b6573" text-anchor="middle" font-weight="600">CG · % MAC</text>`);
+  p.push(`<text transform="translate(13 ${m.top + ih / 2}) rotate(-90)" font-size="11" fill="#5b6573" text-anchor="middle" font-weight="600">Mass · lb</text>`);
 
-  // Envelope polygons: FLT (in-flight) and TOL (takeoff/landing).
-  const polyPath = (env) => {
-    const ring = envelopePolygon(env).map(([pct, mass]) => `${sx(pct).toFixed(1)},${sy(mass).toFixed(1)}`);
-    return ring.join(' ');
-  };
-  parts.push(`<polygon points="${polyPath(aircraft.envelopes.FLT)}" fill="rgba(37,99,235,0.04)" stroke="#93c5fd" stroke-width="1.5" stroke-dasharray="5 4"/>`);
-  parts.push(`<polygon points="${polyPath(aircraft.envelopes.TOL)}" fill="rgba(22,163,74,0.05)" stroke="#16a34a" stroke-width="1.75"/>`);
+  const ring = (env) => envelopePolygon(env).map(([pct, mass]) => `${sx(pct).toFixed(1)},${sy(mass).toFixed(1)}`).join(' ');
+  // In-flight envelope (dashed, behind).
+  p.push(`<polygon points="${ring(aircraft.envelopes.FLT)}" fill="none" stroke="#9cc6ff" stroke-width="1.4" stroke-dasharray="5 4"/>`);
+  // Takeoff/landing envelope (filled, primary).
+  p.push(`<polygon points="${ring(aircraft.envelopes.TOL)}" fill="url(#tolFill)" stroke="#1db954" stroke-width="2"/>`);
 
-  // In-flight fuel-burn path (TOM -> LDM).
-  if (result && result.burnPath && result.burnPath.length) {
-    const d = result.burnPath.map((p, i) => `${i ? 'L' : 'M'}${sx(p.pctMac).toFixed(1)} ${sy(p.mass).toFixed(1)}`).join(' ');
-    parts.push(`<path d="${d}" fill="none" stroke="#9ca3af" stroke-width="1.25" stroke-dasharray="2 3"/>`);
+  // Fuel-burn path.
+  if (result?.burnPath?.length) {
+    const d = result.burnPath.map((q, i) => `${i ? 'L' : 'M'}${sx(q.pctMac).toFixed(1)} ${sy(q.mass).toFixed(1)}`).join(' ');
+    p.push(`<path d="${d}" fill="none" stroke="#aab4c4" stroke-width="1.4" stroke-dasharray="2 3"/>`);
   }
 
-  // Phase points.
-  if (result && result.phases) {
+  // Phase points + labels.
+  if (result?.phases) {
     for (const key of ['zfm', 'tom', 'ldm']) {
-      const p = result.phases[key];
+      const pt = result.phases[key];
       const st = result.envelope[key];
       const style = PHASE_STYLE[key];
-      const cx = sx(p.pctMac);
-      const cy = sy(p.mass);
-      const stroke = st && st.inside ? style.color : '#dc2626';
-      const fill = st && st.inside ? style.color : '#fee2e2';
-      parts.push(`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`);
-      parts.push(`<text x="${(cx + 10).toFixed(1)}" y="${(cy + 4).toFixed(1)}" font-size="12" font-weight="600" fill="${stroke}">${style.label} ${p.pctMac.toFixed(1)}%</text>`);
+      const cx = sx(pt.pctMac), cy = sy(pt.mass);
+      const ok = st && st.inside;
+      const col = ok ? style.color : '#ff3b30';
+      p.push(`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6.5" fill="#fff" filter="url(#sh)"/>`);
+      p.push(`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4.5" fill="${col}"/>`);
+      const tx = cx + 9, label = `${style.label} ${pt.pctMac.toFixed(1)}%`;
+      const wlab = label.length * 6.0 + 10;
+      const lx = Math.min(tx, m.left + iw - wlab);
+      p.push(`<g transform="translate(${lx.toFixed(1)} ${(cy - 9).toFixed(1)})">
+        <rect x="0" y="0" width="${wlab.toFixed(0)}" height="17" rx="8.5" fill="${col}"/>
+        <text x="${(wlab / 2).toFixed(0)}" y="12" font-size="10.5" font-weight="700" fill="#fff" text-anchor="middle">${label}</text></g>`);
     }
   }
 
   // Legend.
-  parts.push(`<g transform="translate(${m.left + 8} ${m.top + 6})" font-size="11" fill="#374151">`);
-  parts.push(`<rect x="0" y="0" width="14" height="3" fill="#16a34a"/><text x="20" y="5">Takeoff/Landing</text>`);
-  parts.push(`<rect x="0" y="16" width="14" height="3" fill="#93c5fd"/><text x="20" y="21">In-flight</text>`);
-  parts.push(`</g>`);
+  p.push(`<g transform="translate(${m.left + 7} ${m.top + 6})" font-size="10">
+    <rect x="0" y="0" width="13" height="3" rx="1.5" fill="#1db954"/><text x="18" y="4" fill="#5b6573">Takeoff/Landing</text>
+    <rect x="0" y="13" width="13" height="3" rx="1.5" fill="#9cc6ff"/><text x="18" y="17" fill="#5b6573">In-flight</text></g>`);
 
-  parts.push(`</svg>`);
-  return parts.join('\n');
+  p.push('</svg>');
+  return p.join('\n');
 }
