@@ -333,8 +333,7 @@ function renderNav() {
     const b = document.createElement('button');
     b.className = 'navitem' + (item.id === activePanel ? ' active' : '') + (done ? ' done' : '');
     const cnt = item.count ? `<span class="count">${item.count()}</span>` : '';
-    const chk = done ? '<span class="tab-check">✓</span>' : '';
-    b.innerHTML = `<svg viewBox="0 0 24 24">${item.icon}</svg><span>${item.label}</span>${cnt}${chk}`;
+    b.innerHTML = `<svg viewBox="0 0 24 24">${item.icon}</svg><span>${item.label}</span>${cnt}`;
     b.onclick = () => { activePanel = item.id; showPanel(); renderNav(); };
     nav.appendChild(b);
   }

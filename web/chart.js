@@ -5,9 +5,9 @@
 import { envelopePolygon } from '../engine/massbalance.mjs';
 
 const PHASE_STYLE = {
-  zfm: { color: '#0a84ff', label: 'ZFM' },
-  tom: { color: '#1db954', label: 'TOM' },
-  ldm: { color: '#ff9f0a', label: 'LDM' },
+  zfm: { color: '#3f5a76', label: 'ZFM' },
+  tom: { color: '#5a8568', label: 'TOM' },
+  ldm: { color: '#8c7647', label: 'LDM' },
 };
 
 export function renderEnvelopeSVG(aircraft, result, opts = {}) {
@@ -44,13 +44,9 @@ export function renderEnvelopeSVG(aircraft, result, opts = {}) {
   const p = [];
   p.push(`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,SF Pro Text,Segoe UI,Roboto,sans-serif">`);
   p.push(`<defs>
-    <linearGradient id="tolFill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1db954" stop-opacity="0.16"/>
-      <stop offset="1" stop-color="#1db954" stop-opacity="0.04"/>
-    </linearGradient>
-    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="1" stdDeviation="1.4" flood-color="#0b1524" flood-opacity="0.25"/></filter>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#1a1f26" flood-opacity="0.2"/></filter>
     <marker id="arrow" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
-      <path d="M1 1L11 6L1 11L3.4 6z" fill="#b06a00"/></marker>
+      <path d="M1 1L11 6L1 11L3.4 6z" fill="#8c7647"/></marker>
   </defs>`);
   p.push(`<rect x="0" y="0" width="${W}" height="${H}" rx="12" fill="#fbfcfe"/>`);
   p.push(`<rect x="${m.left}" y="${m.top}" width="${iw}" height="${ih}" fill="#ffffff" stroke="#dfe4ec"/>`);
@@ -78,9 +74,9 @@ export function renderEnvelopeSVG(aircraft, result, opts = {}) {
 
   const ring = (env) => envelopePolygon(env).map(([pct, mass]) => `${sx(pct).toFixed(1)},${sy(mass).toFixed(1)}`).join(' ');
   // In-flight envelope (dashed, behind).
-  p.push(`<polygon points="${ring(aircraft.envelopes.FLT)}" fill="none" stroke="#9cc6ff" stroke-width="1.4" stroke-dasharray="5 4"/>`);
+  p.push(`<polygon points="${ring(aircraft.envelopes.FLT)}" fill="none" stroke="#9aa7b4" stroke-width="1.4" stroke-dasharray="5 4"/>`);
   // Takeoff/landing envelope (filled, primary).
-  p.push(`<polygon points="${ring(aircraft.envelopes.TOL)}" fill="url(#tolFill)" stroke="#1db954" stroke-width="2"/>`);
+  p.push(`<polygon points="${ring(aircraft.envelopes.TOL)}" fill="rgba(90,133,104,0.08)" stroke="#5a8568" stroke-width="2"/>`);
 
   // Allowable fuel-CG corridor: where total CG could sit if the fuel were at
   // its forward / aft tank-CG limit across the burn. The fuel line must stay
@@ -90,8 +86,8 @@ export function renderEnvelopeSVG(aircraft, result, opts = {}) {
     const fwd = band.map((s) => `${sx(s.fwd.pctMac).toFixed(1)},${sy(s.fwd.mass).toFixed(1)}`);
     const aft = band.map((s) => `${sx(s.aft.pctMac).toFixed(1)},${sy(s.aft.mass).toFixed(1)}`);
     p.push(`<polygon points="${fwd.concat([...aft].reverse()).join(' ')}" fill="rgba(192,57,43,0.06)" stroke="none"/>`);
-    p.push(`<polyline points="${fwd.join(' ')}" fill="none" stroke="#d98a8a" stroke-width="1.2" stroke-dasharray="4 3"/>`);
-    p.push(`<polyline points="${aft.join(' ')}" fill="none" stroke="#d98a8a" stroke-width="1.2" stroke-dasharray="4 3"/>`);
+    p.push(`<polyline points="${fwd.join(' ')}" fill="none" stroke="#bfa39f" stroke-width="1.2" stroke-dasharray="4 3"/>`);
+    p.push(`<polyline points="${aft.join(' ')}" fill="none" stroke="#bfa39f" stroke-width="1.2" stroke-dasharray="4 3"/>`);
   }
 
   // Fuel line: solid line of the CG locus as fuel burns from takeoff down to
@@ -100,7 +96,7 @@ export function renderEnvelopeSVG(aircraft, result, opts = {}) {
   const line = result?.fuelLine?.length > 1 ? result.fuelLine : result?.burnPath;
   if (line?.length > 1) {
     const d = line.map((q, i) => `${i ? 'L' : 'M'}${sx(q.pctMac).toFixed(1)} ${sy(q.mass).toFixed(1)}`).join(' ');
-    p.push(`<path d="${d}" fill="none" stroke="#d98a14" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>`);
+    p.push(`<path d="${d}" fill="none" stroke="#8c7647" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>`);
   }
 
   // Phase points + labels.
@@ -111,7 +107,7 @@ export function renderEnvelopeSVG(aircraft, result, opts = {}) {
       const style = PHASE_STYLE[key];
       const cx = sx(pt.pctMac), cy = sy(pt.mass);
       const ok = st && st.inside;
-      const col = ok ? style.color : '#ff3b30';
+      const col = ok ? style.color : '#a8584f';
       p.push(`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6.5" fill="#fff" filter="url(#sh)"/>`);
       p.push(`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4.5" fill="${col}"/>`);
       const tx = cx + 9, label = `${style.label} ${pt.pctMac.toFixed(1)}%`;
@@ -125,10 +121,10 @@ export function renderEnvelopeSVG(aircraft, result, opts = {}) {
 
   // Legend.
   p.push(`<g transform="translate(${m.left + 7} ${m.top + 6})" font-size="10">
-    <rect x="0" y="0" width="13" height="3" rx="1.5" fill="#1db954"/><text x="18" y="4" fill="#5b6573">Takeoff/Landing</text>
-    <rect x="0" y="13" width="13" height="3" rx="1.5" fill="#9cc6ff"/><text x="18" y="17" fill="#5b6573">In-flight</text>
-    <rect x="0" y="26" width="13" height="3" rx="1.5" fill="#d98a14"/><text x="18" y="30" fill="#5b6573">Fuel burn</text>
-    <rect x="0" y="39" width="13" height="3" rx="1.5" fill="#d98a8a"/><text x="18" y="43" fill="#5b6573">Fuel CG limits</text></g>`);
+    <rect x="0" y="0" width="13" height="3" rx="1.5" fill="#5a8568"/><text x="18" y="4" fill="#565c66">Takeoff/Landing</text>
+    <rect x="0" y="13" width="13" height="3" rx="1.5" fill="#9aa7b4"/><text x="18" y="17" fill="#565c66">In-flight</text>
+    <rect x="0" y="26" width="13" height="3" rx="1.5" fill="#8c7647"/><text x="18" y="30" fill="#565c66">Fuel burn</text>
+    <rect x="0" y="39" width="13" height="3" rx="1.5" fill="#bfa39f"/><text x="18" y="43" fill="#565c66">Fuel CG limits</text></g>`);
 
   p.push('</svg>');
   return p.join('\n');
