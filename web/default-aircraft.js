@@ -4,6 +4,7 @@ export default {
   "name": "D-ABEI",
   "_note": "Index, MAC, basic, MZFM, the Combined fuel-arm table, the CG envelope and the seat arms are REAL supplied values. MTOM/MLM/MRW and crew/pantry/cargo arms marked _placeholder are stand-ins until provided.",
   "units": { "mass": "lb", "arm": "in" },
+  "regulation": "FAA",
 
   "index": { "sta": -1.5, "scale": 18000.0, "offset": 25.0 },
   "mac": { "lemac": -33.443, "maclen": 133.772 },

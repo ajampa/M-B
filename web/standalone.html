@@ -535,6 +535,8 @@ textarea { width: 100%; min-height: 88px; border: 1px solid var(--line-strong); 
         <div class="card">
           <div class="card-head"><h2>Aircraft</h2><div class="sub">Dispatch — identity &amp; weighing</div></div>
           <div class="field"><div class="label"><div class="t">Type / registration</div></div><input type="text" class="wide" id="ac_name" /></div>
+          <div class="field"><div class="label"><div class="t">Terminology</div><div class="h">loadsheet labels</div></div>
+            <div class="seg" id="regSeg"><button data-reg="EASA">EASA</button><button data-reg="FAA">FAA</button></div></div>
           <div class="field"><div class="label"><div class="t">Basic Mass</div><div class="h">Empty weighed mass (BM)</div></div><input type="number" id="basicMass" /><span class="unit" data-u="mass">lb</span></div>
           <div class="field"><div class="label"><div class="t">Basic Arm</div><div class="h">Basic CG arm (BARM)</div></div><input type="number" id="basicArm" step="0.001" /><span class="unit" data-u="arm">in</span></div>
         </div>
@@ -1088,6 +1090,7 @@ const DEFAULT_AIRCRAFT = {
   "name": "D-ABEI",
   "_note": "Index, MAC, basic, MZFM, the Combined fuel-arm table, the CG envelope and the seat arms are REAL supplied values. MTOM/MLM/MRW and crew/pantry/cargo arms marked _placeholder are stand-ins until provided.",
   "units": { "mass": "lb", "arm": "in" },
+  "regulation": "FAA",
 
   "index": { "sta": -1.5, "scale": 18000.0, "offset": 25.0 },
   "mac": { "lemac": -33.443, "maclen": 133.772 },
@@ -1177,6 +1180,7 @@ const ATR_AIRCRAFT = {
   "name": "EI-GPP",
   "_note": "ATR 72. Index/MAC/basic/MZFM, crew, the Main fuel-arm table, the section row arms and the CG envelope are supplied values. MTOM/MLM/MRW and cargo/pantry arms marked _placeholder.",
   "units": { "mass": "kg", "arm": "m" },
+  "regulation": "EASA",
 
   "index": { "sta": 14.18, "scale": 150.0, "offset": 0.0 },
   "mac": { "lemac": 13.604, "maclen": 2.303 },
@@ -1507,6 +1511,7 @@ function diffAircraft(a, b) {
   const S = (key, label, from, to, unit) => { if (from !== to) out.push({ key, label, from, to, unit }); };
   const D = (key, desc) => out.push({ key, desc });
   S('name', 'Name', a.name, b.name);
+  S('regulation', 'Terminology', a.regulation, b.regulation);
   S('sectionArmMode', 'Section arm', a.sectionArmMode || 'mean', b.sectionArmMode || 'mean');
   for (const [grp, label, unit] of [['index', 'Index', ''], ['mac', 'MAC', au], ['limits', 'Limit', mu], ['standardMasses', 'Std mass', mu]]) {
     const ma = a[grp] || {}, mb = b[grp] || {};
@@ -1564,6 +1569,14 @@ function diffPairs(pa, pb, key, label, out) {
 // Unit labels come from the selected aircraft.
 function massU() { return aircraft.units?.mass || 'lb'; }
 function armU() { return aircraft.units?.arm || 'in'; }
+
+// Loadsheet terminology — EASA (mass) vs FAA (weight), selectable in Dispatch.
+const TERMS = {
+  EASA: { dom: 'DOM', zfm: 'ZFM', tom: 'TOM', ldm: 'LDM', ramp: 'RAMP', mzfm: 'MZFM', mtom: 'MTOM', mlm: 'MLM', mrw: 'MRW' },
+  FAA: { dom: 'BOW', zfm: 'ZFW', tom: 'TOW', ldm: 'LDW', ramp: 'RAMP', mzfm: 'MZFW', mtom: 'MTOW', mlm: 'MLW', mrw: 'MRW' },
+};
+function regOf() { return aircraft.regulation || (massU() === 'kg' ? 'EASA' : 'FAA'); }
+function terms() { return TERMS[regOf()]; }
 function setUnits() {
   document.querySelectorAll('[data-u="mass"]').forEach((e) => e.textContent = massU());
   document.querySelectorAll('[data-u="arm"]').forEach((e) => e.textContent = armU());
@@ -2004,10 +2017,11 @@ function recompute() {
   el('loadsheetTime').innerHTML = `<span class="pill blue flat">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
 }
 function renderSummary(r) {
+  const T = terms();
   const rowsDef = [
-    ['DOM', r.phases.dom, null, null], ['ZFM', r.phases.zfm, r.limits.mzfm, r.envelope.zfm],
-    ['TOM', r.phases.tom, r.limits.mtom, r.envelope.tom], ['LDM', r.phases.ldm, r.limits.mlm, r.envelope.ldm],
-    ['RAMP', r.phases.ramp, r.limits.mrw, null],
+    [T.dom, r.phases.dom, null, null], [T.zfm, r.phases.zfm, r.limits.mzfm, r.envelope.zfm],
+    [T.tom, r.phases.tom, r.limits.mtom, r.envelope.tom], [T.ldm, r.phases.ldm, r.limits.mlm, r.envelope.ldm],
+    [T.ramp, r.phases.ramp, r.limits.mrw, null],
   ];
   el('summaryBody').innerHTML = rowsDef.map(([name, p, lim, env]) => {
     const bad = (lim && lim.ok === false) || (env && !env.inside);
@@ -2048,6 +2062,8 @@ function renderVerdict(r) {
 function renderAircraft() {
   el('ac_name').value = aircraft.name;
   el('ac_name').oninput = (e) => { aircraft.name = e.target.value; el('acReg').textContent = aircraft.name; save(); };
+  const reg = regOf();
+  document.querySelectorAll('#regSeg button').forEach((b) => { b.classList.toggle('on', b.dataset.reg === reg); b.onclick = () => { aircraft.regulation = b.dataset.reg; renderAircraft(); dispatchChanged(); }; });
   bindNum('basicMass', 'basicMass');
   bindNum('basicArm', 'basicArm');
   for (const k of ['mrw', 'mtom', 'mzfm', 'mlm']) { el('cfg_' + k).value = aircraft.limits[k]; bindCfg('cfg_' + k, () => aircraft.limits, k); }

@@ -3,6 +3,7 @@
   "name": "EI-GPP",
   "_note": "ATR 72. Index/MAC/basic/MZFM, crew, the Main fuel-arm table, the section row arms and the CG envelope are supplied values. MTOM/MLM/MRW and cargo/pantry arms marked _placeholder.",
   "units": { "mass": "kg", "arm": "m" },
+  "regulation": "EASA",
 
   "index": { "sta": 14.18, "scale": 150.0, "offset": 0.0 },
   "mac": { "lemac": 13.604, "maclen": 2.303 },

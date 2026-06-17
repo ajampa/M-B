@@ -114,6 +114,7 @@ function diffAircraft(a, b) {
   const S = (key, label, from, to, unit) => { if (from !== to) out.push({ key, label, from, to, unit }); };
   const D = (key, desc) => out.push({ key, desc });
   S('name', 'Name', a.name, b.name);
+  S('regulation', 'Terminology', a.regulation, b.regulation);
   S('sectionArmMode', 'Section arm', a.sectionArmMode || 'mean', b.sectionArmMode || 'mean');
   for (const [grp, label, unit] of [['index', 'Index', ''], ['mac', 'MAC', au], ['limits', 'Limit', mu], ['standardMasses', 'Std mass', mu]]) {
     const ma = a[grp] || {}, mb = b[grp] || {};
@@ -171,6 +172,14 @@ function diffPairs(pa, pb, key, label, out) {
 // Unit labels come from the selected aircraft.
 function massU() { return aircraft.units?.mass || 'lb'; }
 function armU() { return aircraft.units?.arm || 'in'; }
+
+// Loadsheet terminology — EASA (mass) vs FAA (weight), selectable in Dispatch.
+const TERMS = {
+  EASA: { dom: 'DOM', zfm: 'ZFM', tom: 'TOM', ldm: 'LDM', ramp: 'RAMP', mzfm: 'MZFM', mtom: 'MTOM', mlm: 'MLM', mrw: 'MRW' },
+  FAA: { dom: 'BOW', zfm: 'ZFW', tom: 'TOW', ldm: 'LDW', ramp: 'RAMP', mzfm: 'MZFW', mtom: 'MTOW', mlm: 'MLW', mrw: 'MRW' },
+};
+function regOf() { return aircraft.regulation || (massU() === 'kg' ? 'EASA' : 'FAA'); }
+function terms() { return TERMS[regOf()]; }
 function setUnits() {
   document.querySelectorAll('[data-u="mass"]').forEach((e) => e.textContent = massU());
   document.querySelectorAll('[data-u="arm"]').forEach((e) => e.textContent = armU());
@@ -611,10 +620,11 @@ function recompute() {
   el('loadsheetTime').innerHTML = `<span class="pill blue flat">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
 }
 function renderSummary(r) {
+  const T = terms();
   const rowsDef = [
-    ['DOM', r.phases.dom, null, null], ['ZFM', r.phases.zfm, r.limits.mzfm, r.envelope.zfm],
-    ['TOM', r.phases.tom, r.limits.mtom, r.envelope.tom], ['LDM', r.phases.ldm, r.limits.mlm, r.envelope.ldm],
-    ['RAMP', r.phases.ramp, r.limits.mrw, null],
+    [T.dom, r.phases.dom, null, null], [T.zfm, r.phases.zfm, r.limits.mzfm, r.envelope.zfm],
+    [T.tom, r.phases.tom, r.limits.mtom, r.envelope.tom], [T.ldm, r.phases.ldm, r.limits.mlm, r.envelope.ldm],
+    [T.ramp, r.phases.ramp, r.limits.mrw, null],
   ];
   el('summaryBody').innerHTML = rowsDef.map(([name, p, lim, env]) => {
     const bad = (lim && lim.ok === false) || (env && !env.inside);
@@ -655,6 +665,8 @@ function renderVerdict(r) {
 function renderAircraft() {
   el('ac_name').value = aircraft.name;
   el('ac_name').oninput = (e) => { aircraft.name = e.target.value; el('acReg').textContent = aircraft.name; save(); };
+  const reg = regOf();
+  document.querySelectorAll('#regSeg button').forEach((b) => { b.classList.toggle('on', b.dataset.reg === reg); b.onclick = () => { aircraft.regulation = b.dataset.reg; renderAircraft(); dispatchChanged(); }; });
   bindNum('basicMass', 'basicMass');
   bindNum('basicArm', 'basicArm');
   for (const k of ['mrw', 'mtom', 'mzfm', 'mlm']) { el('cfg_' + k).value = aircraft.limits[k]; bindCfg('cfg_' + k, () => aircraft.limits, k); }
