@@ -10,6 +10,53 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+<!-- LOGIN -->
+<div id="authScreen" class="screen auth">
+  <div class="auth-card">
+    <div class="auth-logo">M&amp;B</div>
+    <h1>Trim — Mass &amp; Balance</h1>
+    <p class="auth-sub">Sign in to continue</p>
+    <input id="login_user" placeholder="Username" autocomplete="username" />
+    <input id="login_pass" type="password" placeholder="Password" autocomplete="current-password" />
+    <div id="login_err" class="auth-err"></div>
+    <button class="btn primary auth-btn" id="loginBtn">Sign in</button>
+    <div class="auth-hint">Demo accounts — admin/admin · dispatch/dispatch · pilot/pilot</div>
+  </div>
+</div>
+
+<!-- SUPERADMIN: USERS -->
+<div id="adminScreen" class="screen admin hidden">
+  <div class="screen-bar"><div class="mark">M&amp;B</div><b>Superadmin · Users</b><div class="spacer"></div>
+    <button class="btn small" id="adminEnterApp">Open W&amp;B app</button>
+    <button class="btn small ghost" id="adminLogout">Sign out</button></div>
+  <div class="screen-body">
+    <div class="card"><div class="card-head"><h2>Users</h2></div><div id="userList"></div></div>
+    <div class="card">
+      <div class="card-head"><h2>Create user</h2></div>
+      <div class="grid2">
+        <div class="field"><div class="label"><div class="t">Full name</div></div><input id="nu_name" class="wide" /></div>
+        <div class="field"><div class="label"><div class="t">Username</div></div><input id="nu_user" class="wide" /></div>
+        <div class="field"><div class="label"><div class="t">Password</div></div><input id="nu_pass" class="wide" /></div>
+        <div class="field"><div class="label"><div class="t">Role</div></div>
+          <select id="nu_role" class="wide"><option value="pilot">Pilot</option><option value="dispatch">Dispatch</option><option value="superadmin">Superadmin</option></select></div>
+      </div>
+      <div id="nu_err" class="auth-err"></div>
+      <button class="btn primary" id="addUserBtn" style="margin-top:10px">Create user</button>
+    </div>
+  </div>
+</div>
+
+<!-- PILOT: SELECT AIRCRAFT -->
+<div id="pilotStart" class="screen pilotstart hidden">
+  <div class="screen-bar"><div class="mark">M&amp;B</div><b id="pilotStartName">Pilot</b><div class="spacer"></div>
+    <button class="btn small ghost" id="pilotLogout">Sign out</button></div>
+  <div class="screen-body">
+    <h1>Select aircraft</h1>
+    <p class="auth-sub">Choose the aircraft for this flight, then complete each section.</p>
+    <div id="startFleet" class="start-fleet"></div>
+  </div>
+</div>
+
 <div class="app-frame">
   <div class="appbar">
     <div class="mark">M&amp;B</div>
@@ -24,6 +71,9 @@
       <span>Flight</span><b id="flightNo">—</b><span>·</span><span id="flightRoute"></span>
     </div>
     <span id="overallBadge"></span>
+    <button class="btn small ghost" id="adminBtn" style="display:none">Users</button>
+    <div class="userchip"><span class="uc-name" id="userName"></span><span class="uc-role" id="userRole"></span></div>
+    <button class="btn small ghost" id="logoutBtn">Sign out</button>
   </div>
 
   <div class="app-body">
@@ -208,6 +258,7 @@
           <div style="margin-top:10px"><button class="btn primary" id="xmlImport">Import</button></div>
         </div>
       </section>
+      <div class="pilot-next-bar" id="pilotNextBar"><button class="btn primary" id="pilotNext">Next ▸</button></div>
     </main>
 
     <aside class="side">

@@ -319,6 +319,15 @@ function showPanel() {
   activePanel = item.id;
   document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === item.panel));
   if (item.render) item.render();
+  updatePilotNext();
+}
+function updatePilotNext() {
+  const bar = el('pilotNextBar'); if (!bar) return;
+  bar.style.display = mode === 'pilot' ? '' : 'none';
+  const order = NAV_PILOT.map((n) => n.id); const i = order.indexOf(activePanel);
+  const btnEl = el('pilotNext');
+  btnEl.textContent = i >= order.length - 1 ? 'Done — review loadsheet ✓' : 'Next: ' + (NAV_PILOT[i + 1]?.label || '') + ' ▸';
+  btnEl.onclick = () => { const j = order.indexOf(activePanel); if (j < order.length - 1) { activePanel = order[j + 1]; showPanel(); renderNav(); } };
 }
 function setMode(m) {
   mode = m;
@@ -1022,4 +1031,92 @@ function spanCls(cls, t) { const s = document.createElement('span'); s.className
 function fmt(n) { return Math.round(n).toLocaleString(); }
 function pill(kind, txt) { return `<span class="pill ${kind}">${txt}</span>`; }
 
-renderAll();
+// ---- auth / roles / routing -------------------------------------------------
+const LS_USERS = 'mb.users.v1';
+const LS_SESSION = 'mb.session.v1';
+let users = load(LS_USERS) || [
+  { username: 'admin', password: 'admin', role: 'superadmin', name: 'Administrator' },
+  { username: 'dispatch', password: 'dispatch', role: 'dispatch', name: 'Dispatcher' },
+  { username: 'pilot', password: 'pilot', role: 'pilot', name: 'Captain Pilot' },
+];
+let session = load(LS_SESSION) || null;
+function persistAuth() { localStorage.setItem(LS_USERS, JSON.stringify(users)); localStorage.setItem(LS_SESSION, JSON.stringify(session)); }
+function currentUser() { return users.find((u) => u.username === session) || null; }
+
+function showScreen(s) {
+  el('authScreen').classList.toggle('hidden', s !== 'auth');
+  el('adminScreen').classList.toggle('hidden', s !== 'admin');
+  el('pilotStart').classList.toggle('hidden', s !== 'pilotStart');
+  document.querySelector('.app-frame').classList.toggle('hidden', s !== 'app');
+}
+function applyRoleUI() {
+  const u = currentUser();
+  el('userName').textContent = u ? u.name : '';
+  el('userRole').textContent = u ? u.role : '';
+  const canDispatch = u && (u.role === 'dispatch' || u.role === 'superadmin');
+  el('modeSeg').style.display = canDispatch ? '' : 'none';
+  el('adminBtn').style.display = (u && u.role === 'superadmin') ? '' : 'none';
+  if (u && u.role === 'pilot' && mode !== 'pilot') setMode('pilot');
+}
+function routeUser() {
+  const u = currentUser();
+  if (!u) return showScreen('auth');
+  applyRoleUI();
+  if (u.role === 'superadmin') { renderAdmin(); showScreen('admin'); }
+  else if (u.role === 'pilot') { el('pilotStartName').textContent = u.name; renderPilotStart(); showScreen('pilotStart'); }
+  else { setMode('pilot'); showScreen('app'); }
+}
+function doLogin() {
+  const un = el('login_user').value.trim(), pw = el('login_pass').value;
+  const u = users.find((x) => x.username === un && x.password === pw);
+  if (!u) { el('login_err').textContent = 'Invalid username or password.'; return; }
+  session = u.username; persistAuth(); el('login_pass').value = ''; el('login_err').textContent = '';
+  routeUser();
+}
+function logout() { session = null; persistAuth(); el('login_user').value = ''; showScreen('auth'); }
+el('loginBtn').onclick = doLogin;
+el('login_pass').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+el('logoutBtn').onclick = logout;
+el('adminLogout').onclick = logout;
+el('pilotLogout').onclick = logout;
+el('adminBtn').onclick = () => { renderAdmin(); showScreen('admin'); };
+el('adminEnterApp').onclick = () => { setMode('dispatch'); showScreen('app'); };
+
+function renderAdmin() {
+  const host = el('userList'); host.innerHTML = '';
+  for (const u of users) {
+    const row = div('fleet-row');
+    row.innerHTML = `<div class="fl-main"><div class="fl-name">${u.name} <span class="pill blue flat">${u.role}</span></div><div class="fl-sub">@${u.username}</div></div>`;
+    const del = btn('Delete'); del.className = 'btn small ghost'; del.style.color = 'var(--red)';
+    del.onclick = () => {
+      if (u.username === session) { alert("You can't delete the account you're signed in as."); return; }
+      if (users.filter((x) => x.role === 'superadmin').length === 1 && u.role === 'superadmin') { alert('At least one superadmin is required.'); return; }
+      if (confirm('Delete user ' + u.username + '?')) { users = users.filter((x) => x.username !== u.username); persistAuth(); renderAdmin(); }
+    };
+    row.appendChild(del); host.appendChild(row);
+  }
+}
+el('addUserBtn').onclick = () => {
+  const name = el('nu_name').value.trim(), un = el('nu_user').value.trim(), pw = el('nu_pass').value, role = el('nu_role').value;
+  if (!name || !un || !pw) { el('nu_err').textContent = 'All fields are required.'; return; }
+  if (users.some((u) => u.username === un)) { el('nu_err').textContent = 'Username already exists.'; return; }
+  users.push({ username: un, password: pw, role, name }); persistAuth();
+  el('nu_name').value = ''; el('nu_user').value = ''; el('nu_pass').value = ''; el('nu_err').textContent = '';
+  renderAdmin();
+};
+
+function renderPilotStart() {
+  const host = el('startFleet'); host.innerHTML = '';
+  for (const a of fleet) {
+    const card = div('start-card');
+    card.innerHTML = `<div class="sc-reg">${a.name}</div><div class="sc-sub">${a.units?.mass || 'lb'} / ${a.units?.arm || 'in'} · ${a.cabinRows ? 'section seating' : 'seat map'}</div><div class="sc-go">Start flight ▸</div>`;
+    card.onclick = () => { switchAircraft(a.id); setMode('pilot'); activePanel = 'flight'; showScreen('app'); renderNav(); showPanel(); };
+    host.appendChild(card);
+  }
+}
+
+function boot() {
+  renderAll();
+  routeUser();
+}
+boot();
