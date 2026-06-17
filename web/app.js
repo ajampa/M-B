@@ -175,8 +175,8 @@ function armU() { return aircraft.units?.arm || 'in'; }
 
 // Loadsheet terminology — EASA (mass) vs FAA (weight), selectable in Dispatch.
 const TERMS = {
-  EASA: { dom: 'DOM', zfm: 'ZFM', tom: 'TOM', ldm: 'LDM', ramp: 'RAMP', mzfm: 'MZFM', mtom: 'MTOM', mlm: 'MLM', mrw: 'MRW' },
-  FAA: { dom: 'BOW', zfm: 'ZFW', tom: 'TOW', ldm: 'LDW', ramp: 'RAMP', mzfm: 'MZFW', mtom: 'MTOW', mlm: 'MLW', mrw: 'MRW' },
+  EASA: { basic: 'Basic Mass', crew: 'Crew', items: 'Pantry', dom: 'DOM', pax: 'Passengers', cargo: 'Cargo', payload: 'Total Payload', zfm: 'ZFM', fuel: 'Fuel', taxi: 'Taxi', tom: 'TOM', trip: 'Trip Fuel', ldm: 'LDM', ramp: 'RAMP', mzfm: 'MZFM', mtom: 'MTOM', mlm: 'MLM', mrw: 'MRW' },
+  FAA: { basic: 'BEW', crew: 'Crew', items: 'Aircraft Items', dom: 'BOW', pax: 'Passengers', cargo: 'Cargo', payload: 'Total Payload', zfm: 'ZFW', fuel: 'Fuel Load', taxi: 'Taxi', tom: 'TOW', trip: 'Trip Fuel', ldm: 'LDW', ramp: 'RAMP', mzfm: 'MZFW', mtom: 'MTOW', mlm: 'MLW', mrw: 'MRW' },
 };
 function regOf() { return aircraft.regulation || (massU() === 'kg' ? 'EASA' : 'FAA'); }
 function terms() { return TERMS[regOf()]; }
@@ -619,20 +619,62 @@ function recompute() {
   el('overallBadge').innerHTML = pill(r.ok ? 'good' : 'bad', r.ok ? 'Within limits' : 'Check limits');
   el('loadsheetTime').innerHTML = `<span class="pill blue flat">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
 }
+let lsExpanded = {};
 function renderSummary(r) {
   const T = terms();
-  const rowsDef = [
-    [T.dom, r.phases.dom, null, null], [T.zfm, r.phases.zfm, r.limits.mzfm, r.envelope.zfm],
-    [T.tom, r.phases.tom, r.limits.mtom, r.envelope.tom], [T.ldm, r.phases.ldm, r.limits.mlm, r.envelope.ldm],
-    [T.ramp, r.phases.ramp, r.limits.mrw, null],
-  ];
-  el('summaryBody').innerHTML = rowsDef.map(([name, p, lim, env]) => {
-    const bad = (lim && lim.ok === false) || (env && !env.inside);
-    let status = '—';
-    if (env) status = pill(env.inside ? 'good' : 'bad', env.inside ? 'IN' : 'OUT');
-    else if (lim && lim.ok != null) status = pill(lim.ok ? 'good' : 'bad', lim.ok ? 'OK' : 'OVER');
-    return `<tr class="${bad ? 'is-bad' : ''}"><td class="phase">${name}</td><td>${fmt(p.mass)}</td><td>${p.pctMac.toFixed(1)}</td><td>${p.index.toFixed(1)}</td><td>${status}</td></tr>`;
-  }).join('');
+  const out = [];
+  // Weight row: weight / arm / %MAC (+ envelope range + limit).
+  const wRow = (label, p, lim, env, bold) => {
+    const macColor = env ? (env.inside ? 'good' : 'bad') : '';
+    const range = env && env.fwdLimit != null ? `<div class="ls-range">${env.fwdLimit.toFixed(2)}–${env.aftLimit.toFixed(2)}</div>` : '';
+    const limLine = lim && lim.max != null ? `<div class="ls-limit">Limit ${fmt(lim.max)}</div>` : '';
+    return `<div class="ls-row ${bold ? 'ls-bold' : ''} ${lim && lim.ok === false ? 'ls-bad' : ''}">
+      <span class="ls-l">${label}${limLine}</span>
+      <span class="ls-w">${fmt(p.mass)}</span>
+      <span class="ls-a">${p.arm.toFixed(2)}</span>
+      <span class="ls-m ${macColor}">${p.pctMac.toFixed(2)}${range}</span></div>`;
+  };
+  // Collapsible component row (weight only) with sub-rows.
+  const compRow = (key, label, mass, subs) => {
+    const open = lsExpanded[key];
+    const chev = subs.length ? `<span class="ls-chev ${open ? 'open' : ''}">⌄</span>` : '';
+    const sub = open && subs.length ? `<div class="ls-sub">${subs.map((s) => `<div class="ls-subrow"><span>${s.label}</span><span>${fmt(s.mass)}</span></div>`).join('')}</div>` : '';
+    return `<div class="ls-row ls-comp" data-exp="${key}"><span class="ls-l">${label}${chev}</span><span class="ls-w">${fmt(mass)}</span><span class="ls-a"></span><span class="ls-m"></span></div>${sub}`;
+  };
+  const simpleRow = (label, mass, cls) => `<div class="ls-row ${cls || 'ls-simple'}"><span class="ls-l">${label}</span><span class="ls-w">${fmt(mass)}</span><span class="ls-a"></span><span class="ls-m"></span></div>`;
+
+  const crewSubs = (aircraft.stations?.crew || []).map((c) => ({ label: c.label, mass: Number(state.crew?.[c.id]) || 0 })).filter((s) => s.mass > 0);
+  const pantrySubs = (aircraft.stations?.pantry || []).map((p) => { let v = state.pantry?.[p.id]; if (v === true) v = p.mass; if (v == null) v = p.mass; return { label: p.label, mass: Number(v) || 0 }; }).filter((s) => s.mass > 0);
+  const cargoSubs = (aircraft.stations?.cargo || []).map((h) => ({ label: h.label, mass: Number(state.cargo?.[h.id]) || 0 })).filter((s) => s.mass > 0);
+  let paxSubs = [];
+  if (aircraft.cabinRows) {
+    for (const sec of cabinSections()) {
+      const c = sectionCounts(sec.label);
+      for (const [cat, clabel] of SECTION_CATS) { const n = Number(c[cat]) || 0; if (n > 0) paxSubs.push({ label: `Sec ${sec.label} · ${clabel} ×${n}`, mass: n * (stdMassFor(cat) || 0) }); }
+      const cn = Number(c.customCount) || 0; if (cn > 0) paxSubs.push({ label: `Sec ${sec.label} · Custom ×${cn}`, mass: cn * (Number(c.customMass) || 0) });
+    }
+  } else {
+    for (const [id, t] of Object.entries(state.pax || {})) { if (!t) continue; const seat = aircraft.stations.pax.find((s) => s.id === id); paxSubs.push({ label: `Seat ${seat?.label ?? id}`, mass: typeof t === 'number' ? t : stdMassFor(t) }); }
+  }
+
+  out.push(wRow(T.basic, r.phases.basic, null, null, false));
+  out.push(compRow('crew', T.crew, r.breakdown.crew, crewSubs));
+  out.push(compRow('items', T.items, r.breakdown.pantry, pantrySubs));
+  out.push(wRow(T.dom, r.phases.dom, null, null, true));
+  out.push(compRow('pax', `${T.pax} (${loadPaxCount()})`, r.breakdown.pax, paxSubs));
+  out.push(compRow('cargo', T.cargo, r.breakdown.cargo, cargoSubs));
+  out.push(simpleRow(T.payload, r.breakdown.payload));
+  out.push(wRow(T.zfm, r.phases.zfm, r.limits.mzfm, r.envelope.zfm, true));
+  out.push(simpleRow(T.fuel, r.fuel.ramp, 'ls-fuel'));
+  out.push(wRow(T.ramp, r.phases.ramp, r.limits.mrw, r.envelope.ramp, false));
+  out.push(simpleRow(T.taxi, r.fuel.taxi, 'ls-fuel'));
+  out.push(wRow(T.tom, r.phases.tom, r.limits.mtom, r.envelope.tom, true));
+  out.push(simpleRow(T.trip, r.fuel.trip, 'ls-fuel'));
+  out.push(wRow(T.ldm, r.phases.ldm, r.limits.mlm, r.envelope.ldm, true));
+
+  const body = el('summaryBody');
+  body.innerHTML = out.join('');
+  body.querySelectorAll('[data-exp]').forEach((row) => row.onclick = () => { const k = row.dataset.exp; lsExpanded[k] = !lsExpanded[k]; renderSummary(r); });
 }
 function renderFuelDerived(r) {
   const f = r.fuel;

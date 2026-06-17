@@ -303,6 +303,7 @@ export function computeLoadsheet(aircraft, load) {
   const ramp = combine(zfm, hasTanks ? distributeFuel(tanks, fc.ramp) : armlessFuel(fc.ramp, aircraft));
 
   const phases = {
+    basic: describe(toPoint(basic), aircraft),
     dom: describe(toPoint(dom), aircraft),
     zfm: describe(toPoint(zfm), aircraft),
     tom: describe(toPoint(tom), aircraft),
@@ -310,11 +311,18 @@ export function computeLoadsheet(aircraft, load) {
     ramp: describe(toPoint(ramp), aircraft),
   };
 
+  // Component breakdown (for the detailed loadsheet).
+  const breakdown = {
+    crew: crew.mass, pantry: pantry.mass, equip: equip.mass,
+    pax: pax.mass, cargo: cargo.mass, payload: pax.mass + cargo.mass,
+  };
+
   // Envelope verdicts: TOL governs ground/takeoff/landing, FLT governs in-flight.
   const envelope = {
     zfm: envelopeStatus(aircraft, 'FLT', phases.zfm.mass, phases.zfm.pctMac),
     tom: envelopeStatus(aircraft, 'TOL', phases.tom.mass, phases.tom.pctMac),
     ldm: envelopeStatus(aircraft, 'TOL', phases.ldm.mass, phases.ldm.pctMac),
+    ramp: envelopeStatus(aircraft, 'TOL', phases.ramp.mass, phases.ramp.pctMac),
   };
 
   // In-flight burn path (TOM -> LDM, the operational range) for the envelope
@@ -343,7 +351,7 @@ export function computeLoadsheet(aircraft, load) {
     burnPath.every((p) => p.status.inside && p.limit.inside) &&
     fc.sufficient;
 
-  return { phases, envelope, burnPath, fuelLine, fuelLimits, limits, fuel: fc, ok: allOk };
+  return { phases, breakdown, envelope, burnPath, fuelLine, fuelLimits, limits, fuel: fc, ok: allOk };
 }
 
 function toPoint(block) {
