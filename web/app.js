@@ -309,16 +309,32 @@ function loadPaxCount() {
   if (aircraft.cabinRows) { let t = 0; for (const sec of cabinSections()) t += sectionTotal(sectionCounts(sec.label)); return t; }
   return Object.values(state.pax || {}).filter(Boolean).length;
 }
+// A pilot tab is "done" (green) when it holds values, or the pilot confirmed it
+// by tapping Next.
+function tabHasValues(id) {
+  switch (id) {
+    case 'flight': return !!(state.flight?.no || state.flight?.route || state.flight?.alt);
+    case 'crew': return (aircraft.stations?.crew || []).some((c) => (Number(state.crew?.[c.id]) || 0) > 0);
+    case 'pantry': return (aircraft.stations?.pantry || []).some((p) => { let v = state.pantry?.[p.id]; if (v === true) v = p.mass; if (v == null) v = p.mass; return (Number(v) || 0) > 0; });
+    case 'pax': return loadPaxCount() > 0;
+    case 'cargo': return (aircraft.stations?.cargo || []).some((h) => (Number(state.cargo?.[h.id]) || 0) > 0);
+    case 'fuel': return (Number(state.fuel?.ramp) || 0) > 0;
+    default: return false;
+  }
+}
+function tabDone(id) { return !!(state.confirmed && state.confirmed[id]) || tabHasValues(id); }
 
 function renderNav() {
   const nav = el('nav'); nav.innerHTML = '';
   const g = document.createElement('div'); g.className = 'group-label'; g.textContent = mode === 'dispatch' ? 'Dispatch' : 'Flight';
   nav.appendChild(g);
   for (const item of currentNav()) {
+    const done = mode === 'pilot' && tabDone(item.id);
     const b = document.createElement('button');
-    b.className = 'navitem' + (item.id === activePanel ? ' active' : '');
+    b.className = 'navitem' + (item.id === activePanel ? ' active' : '') + (done ? ' done' : '');
     const cnt = item.count ? `<span class="count">${item.count()}</span>` : '';
-    b.innerHTML = `<svg viewBox="0 0 24 24">${item.icon}</svg><span>${item.label}</span>${cnt}`;
+    const chk = done ? '<span class="tab-check">✓</span>' : '';
+    b.innerHTML = `<svg viewBox="0 0 24 24">${item.icon}</svg><span>${item.label}</span>${cnt}${chk}`;
     b.onclick = () => { activePanel = item.id; showPanel(); renderNav(); };
     nav.appendChild(b);
   }
@@ -336,8 +352,13 @@ function updatePilotNext() {
   bar.style.display = mode === 'pilot' ? '' : 'none';
   const order = NAV_PILOT.map((n) => n.id); const i = order.indexOf(activePanel);
   const btnEl = el('pilotNext');
-  btnEl.textContent = i >= order.length - 1 ? 'Done — review loadsheet ✓' : 'Next: ' + (NAV_PILOT[i + 1]?.label || '') + ' ▸';
-  btnEl.onclick = () => { const j = order.indexOf(activePanel); if (j < order.length - 1) { activePanel = order[j + 1]; showPanel(); renderNav(); } };
+  btnEl.textContent = i >= order.length - 1 ? 'Confirm — review loadsheet ✓' : 'Confirm &amp; next: ' + (NAV_PILOT[i + 1]?.label || '') + ' ▸';
+  btnEl.onclick = () => {
+    state.confirmed = state.confirmed || {}; state.confirmed[activePanel] = true; save();
+    const j = order.indexOf(activePanel);
+    if (j < order.length - 1) activePanel = order[j + 1];
+    showPanel(); renderNav();
+  };
 }
 function setMode(m) {
   mode = m;
@@ -619,6 +640,7 @@ function recompute() {
   renderVerdict(r);
   el('overallBadge').innerHTML = pill(r.ok ? 'good' : 'bad', r.ok ? 'Within limits' : 'Check limits');
   el('loadsheetTime').innerHTML = `<span class="pill blue flat">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
+  if (mode === 'pilot') renderNav(); // refresh tab completion (green) as values change
 }
 let lsExpanded = {};
 function renderSummary(r) {

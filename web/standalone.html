@@ -65,18 +65,17 @@ button { font-family: inherit; }
 .appbar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 13px 20px;
+  gap: 12px;
+  padding: 8px 16px;
   background: var(--navy);
-  border-bottom: 3px solid #0c1a29;
+  border-bottom: 2px solid #0c1a29;
   position: sticky; top: 0; z-index: 30;
 }
 .appbar .mark {
-  width: 40px; height: 40px; border-radius: 7px;
+  width: 32px; height: 32px; border-radius: 7px;
   background: rgba(255,255,255,.07);
   border: 1px solid rgba(255,255,255,.22);
-  display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 12.5px; letter-spacing: .03em;
-  box-shadow: inset 0 -2px 0 rgba(0,0,0,.25);
+  display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 11px; letter-spacing: .03em;
 }
 .appbar .title { font-size: 16px; font-weight: 700; line-height: 1.1; color: #fff; letter-spacing: .04em; text-transform: uppercase; }
 .appbar .reg { font-size: 12px; color: rgba(255,255,255,.6); font-variant-numeric: tabular-nums; }
@@ -98,23 +97,26 @@ button { font-family: inherit; }
   .app-body { grid-template-columns: 1fr; grid-template-areas: "nav" "side" "content"; gap: 14px; }
 }
 
-/* Top tab bar */
-.sidebar { grid-area: nav; display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px; box-shadow: var(--shadow); }
-.sidebar .group-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 6px 0 4px; font-weight: 700; }
+/* Top tab strip — dark, integrated, iPad-sized segmented control */
+.sidebar { grid-area: nav; display: flex; flex-direction: row; align-items: stretch; gap: 4px; background: #1e2a38; border: 1px solid #2a3a4d; border-radius: 13px; padding: 5px; box-shadow: var(--shadow); }
+.sidebar .group-label { display: none; }
 .navitem {
-  display: flex; align-items: center; gap: 9px; padding: 9px 15px; border-radius: 9px;
-  border: 1px solid transparent; background: transparent; cursor: pointer; color: var(--ink-2); font-size: 14.5px;
-  font-weight: 600; white-space: nowrap;
+  flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 9px; padding: 15px 14px; border-radius: 9px;
+  border: none; background: transparent; cursor: pointer; color: rgba(255,255,255,.62); font-size: 15px;
+  font-weight: 650; white-space: nowrap; min-height: 52px; letter-spacing: .01em;
 }
-.navitem svg { width: 19px; height: 19px; flex: none; opacity: .85; }
-.navitem .count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; background: var(--panel-2); border-radius: 999px; padding: 1px 7px; }
-.navitem:hover { background: rgba(31,111,235,.07); }
-.navitem.active { background: var(--navy); color: #fff; }
+.navitem svg { width: 19px; height: 19px; flex: none; opacity: .8; }
+.navitem .count { font-size: 12px; color: #fff; font-variant-numeric: tabular-nums; background: rgba(255,255,255,.16); border-radius: 999px; padding: 1px 8px; }
+.navitem:hover { background: rgba(255,255,255,.06); color: #fff; }
+.navitem.active { background: #36465b; color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
 .navitem.active svg { opacity: 1; }
-.navitem.active .count { color: #fff; background: rgba(255,255,255,.2); }
+.navitem.done { color: #4ade80; }
+.navitem.done.active { color: #fff; }
+.tab-check { color: #34d399; font-weight: 800; font-size: 14px; }
+.navitem.active .tab-check { color: #6ee7a8; }
 @media (max-width: 1080px) {
-  .sidebar { overflow-x: auto; flex-wrap: nowrap; }
-  .sidebar .group-label { display: none; }
+  .sidebar { overflow-x: auto; }
+  .navitem { flex: 0 0 auto; }
 }
 
 /* Content + cards */
@@ -464,7 +466,6 @@ textarea { width: 100%; min-height: 88px; border: 1px solid var(--line-strong); 
 <div class="app-frame">
   <div class="appbar">
     <div class="mark">M&amp;B</div>
-    <div><div class="title">Trim</div></div>
     <button class="acpick" id="acPick"><span class="acpick-reg" id="acReg">—</span><span class="acpick-type" id="acType"></span><span class="caret">▾</span></button>
     <div class="seg mode-seg" id="modeSeg">
       <button data-mode="pilot" class="on">Pilot</button>
@@ -1724,16 +1725,32 @@ function loadPaxCount() {
   if (aircraft.cabinRows) { let t = 0; for (const sec of cabinSections()) t += sectionTotal(sectionCounts(sec.label)); return t; }
   return Object.values(state.pax || {}).filter(Boolean).length;
 }
+// A pilot tab is "done" (green) when it holds values, or the pilot confirmed it
+// by tapping Next.
+function tabHasValues(id) {
+  switch (id) {
+    case 'flight': return !!(state.flight?.no || state.flight?.route || state.flight?.alt);
+    case 'crew': return (aircraft.stations?.crew || []).some((c) => (Number(state.crew?.[c.id]) || 0) > 0);
+    case 'pantry': return (aircraft.stations?.pantry || []).some((p) => { let v = state.pantry?.[p.id]; if (v === true) v = p.mass; if (v == null) v = p.mass; return (Number(v) || 0) > 0; });
+    case 'pax': return loadPaxCount() > 0;
+    case 'cargo': return (aircraft.stations?.cargo || []).some((h) => (Number(state.cargo?.[h.id]) || 0) > 0);
+    case 'fuel': return (Number(state.fuel?.ramp) || 0) > 0;
+    default: return false;
+  }
+}
+function tabDone(id) { return !!(state.confirmed && state.confirmed[id]) || tabHasValues(id); }
 
 function renderNav() {
   const nav = el('nav'); nav.innerHTML = '';
   const g = document.createElement('div'); g.className = 'group-label'; g.textContent = mode === 'dispatch' ? 'Dispatch' : 'Flight';
   nav.appendChild(g);
   for (const item of currentNav()) {
+    const done = mode === 'pilot' && tabDone(item.id);
     const b = document.createElement('button');
-    b.className = 'navitem' + (item.id === activePanel ? ' active' : '');
+    b.className = 'navitem' + (item.id === activePanel ? ' active' : '') + (done ? ' done' : '');
     const cnt = item.count ? `<span class="count">${item.count()}</span>` : '';
-    b.innerHTML = `<svg viewBox="0 0 24 24">${item.icon}</svg><span>${item.label}</span>${cnt}`;
+    const chk = done ? '<span class="tab-check">✓</span>' : '';
+    b.innerHTML = `<svg viewBox="0 0 24 24">${item.icon}</svg><span>${item.label}</span>${cnt}${chk}`;
     b.onclick = () => { activePanel = item.id; showPanel(); renderNav(); };
     nav.appendChild(b);
   }
@@ -1751,8 +1768,13 @@ function updatePilotNext() {
   bar.style.display = mode === 'pilot' ? '' : 'none';
   const order = NAV_PILOT.map((n) => n.id); const i = order.indexOf(activePanel);
   const btnEl = el('pilotNext');
-  btnEl.textContent = i >= order.length - 1 ? 'Done — review loadsheet ✓' : 'Next: ' + (NAV_PILOT[i + 1]?.label || '') + ' ▸';
-  btnEl.onclick = () => { const j = order.indexOf(activePanel); if (j < order.length - 1) { activePanel = order[j + 1]; showPanel(); renderNav(); } };
+  btnEl.textContent = i >= order.length - 1 ? 'Confirm — review loadsheet ✓' : 'Confirm &amp; next: ' + (NAV_PILOT[i + 1]?.label || '') + ' ▸';
+  btnEl.onclick = () => {
+    state.confirmed = state.confirmed || {}; state.confirmed[activePanel] = true; save();
+    const j = order.indexOf(activePanel);
+    if (j < order.length - 1) activePanel = order[j + 1];
+    showPanel(); renderNav();
+  };
 }
 function setMode(m) {
   mode = m;
@@ -2034,6 +2056,7 @@ function recompute() {
   renderVerdict(r);
   el('overallBadge').innerHTML = pill(r.ok ? 'good' : 'bad', r.ok ? 'Within limits' : 'Check limits');
   el('loadsheetTime').innerHTML = `<span class="pill blue flat">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
+  if (mode === 'pilot') renderNav(); // refresh tab completion (green) as values change
 }
 let lsExpanded = {};
 function renderSummary(r) {
