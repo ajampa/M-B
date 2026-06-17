@@ -7,7 +7,7 @@ const CATALOG = [DEFAULT_AIRCRAFT, ATR_AIRCRAFT]; // built-in aircraft the fleet
 const LS_FLEET = 'mb.fleet.v7';
 const LS_DRAFTS = 'mb.drafts.v7';
 const LS_HIST = 'mb.hist.v7';
-const LS_LOADS = 'mb.loads.v7';
+const LS_LOADS = 'mb.loads.v8';
 const LS_SEL = 'mb.selected.v7';
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
@@ -185,11 +185,12 @@ function setUnits() {
   document.querySelectorAll('[data-u="arm"]').forEach((e) => e.textContent = armU());
 }
 
-// Per-aircraft demo flight, seeded from the aircraft's seedLoad.
+// A new flight starts empty: no flight number / route / alternate and no fuel.
+// Crew/pantry default to the aircraft fit; pax/cargo come from any seed.
 function freshLoad(ac) {
   const seed = ac.seedLoad || {};
   return {
-    flight: { no: seed.flightNo || '', route: seed.route || '', alt: seed.alt || '' },
+    flight: { no: '', route: '', alt: '' },
     basicMass: ac.basic?.mass ?? 0,
     basicArm: ac.basic?.arm ?? (ac.index?.sta ?? 0),
     crew: Object.fromEntries((ac.stations?.crew || []).map((c) => [c.id, c.mass ?? (ac.units?.mass === 'kg' ? 85 : 200)])),
@@ -197,7 +198,7 @@ function freshLoad(ac) {
     pax: seed.pax || {},
     sections: seed.sections || {},
     cargo: seed.cargo || {},
-    fuel: seed.fuel || { ramp: 0, taxi: 0, trip: 0 },
+    fuel: { ramp: '', taxi: '', trip: '' },
   };
 }
 
@@ -311,7 +312,7 @@ function loadPaxCount() {
 
 function renderNav() {
   const nav = el('nav'); nav.innerHTML = '';
-  const g = document.createElement('div'); g.className = 'group-label'; g.textContent = mode === 'dispatch' ? 'Dispatch — edit config' : 'Flight load';
+  const g = document.createElement('div'); g.className = 'group-label'; g.textContent = mode === 'dispatch' ? 'Dispatch' : 'Flight';
   nav.appendChild(g);
   for (const item of currentNav()) {
     const b = document.createElement('button');
@@ -1164,7 +1165,11 @@ function renderPilotStart() {
   for (const a of fleet) {
     const card = div('start-card');
     card.innerHTML = `<div class="sc-reg">${a.name}</div><div class="sc-sub">${a.units?.mass || 'lb'} / ${a.units?.arm || 'in'} · ${a.cabinRows ? 'section seating' : 'seat map'}</div><div class="sc-go">Start flight ▸</div>`;
-    card.onclick = () => { switchAircraft(a.id); setMode('pilot'); activePanel = 'flight'; showScreen('app'); renderNav(); showPanel(); };
+    card.onclick = () => {
+      ensureDraft(a.id);
+      loads[a.id] = freshLoad(drafts[a.id]); // start a new, empty flight
+      switchAircraft(a.id); setMode('pilot'); activePanel = 'flight'; showScreen('app'); renderNav(); showPanel();
+    };
     host.appendChild(card);
   }
 }

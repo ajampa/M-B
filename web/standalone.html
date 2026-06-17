@@ -87,44 +87,40 @@ button { font-family: inherit; }
 }
 .appbar .flightpick b { color: #fff; font-variant-numeric: tabular-nums; }
 
-/* Body grid */
+/* Body grid — tabs across the top, then content + side panel */
 .app-body {
   display: grid;
-  grid-template-columns: 220px 1fr 470px;
-  grid-template-areas: "nav content side";
+  grid-template-columns: 1fr 470px;
+  grid-template-areas: "nav nav" "content side";
   gap: 18px; padding: 18px; align-items: start; flex: 1;
 }
-@media (max-width: 1180px) {
+@media (max-width: 1080px) {
   .app-body { grid-template-columns: 1fr; grid-template-areas: "nav" "side" "content"; gap: 14px; }
 }
 
-/* Sidebar nav */
-.sidebar { grid-area: nav; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 84px; }
-.sidebar .group-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 12px 10px 4px; font-weight: 700; }
+/* Top tab bar */
+.sidebar { grid-area: nav; display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px; box-shadow: var(--shadow); }
+.sidebar .group-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 6px 0 4px; font-weight: 700; }
 .navitem {
-  display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 12px;
-  border: none; background: transparent; cursor: pointer; color: var(--ink-2); font-size: 15px;
-  font-weight: 550; text-align: left; width: 100%;
+  display: flex; align-items: center; gap: 9px; padding: 9px 15px; border-radius: 9px;
+  border: 1px solid transparent; background: transparent; cursor: pointer; color: var(--ink-2); font-size: 14.5px;
+  font-weight: 600; white-space: nowrap;
 }
-.navitem svg { width: 20px; height: 20px; flex: none; opacity: .85; }
-.navitem .count { margin-left: auto; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.navitem svg { width: 19px; height: 19px; flex: none; opacity: .85; }
+.navitem .count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; background: var(--panel-2); border-radius: 999px; padding: 1px 7px; }
 .navitem:hover { background: rgba(31,111,235,.07); }
 .navitem.active { background: var(--navy); color: #fff; }
 .navitem.active svg { opacity: 1; }
-.navitem.active .count { color: rgba(255,255,255,.85); }
-.navitem .dot { width: 8px; height: 8px; border-radius: 50%; margin-left: auto; }
-.dot.good { background: var(--green); } .dot.bad { background: var(--red); }
-@media (max-width: 1180px) {
-  .sidebar { position: static; flex-direction: row; overflow-x: auto; gap: 8px; padding-bottom: 4px; }
+.navitem.active .count { color: #fff; background: rgba(255,255,255,.2); }
+@media (max-width: 1080px) {
+  .sidebar { overflow-x: auto; flex-wrap: nowrap; }
   .sidebar .group-label { display: none; }
-  .navitem { width: auto; white-space: nowrap; padding: 9px 14px; background: var(--panel); border: 1px solid var(--line); }
-  .navitem .count, .navitem .dot { display: none; }
 }
 
 /* Content + cards */
 .content { grid-area: content; }
 .side { grid-area: side; position: sticky; top: 84px; }
-@media (max-width: 1180px) { .side { position: static; } }
+@media (max-width: 1080px) { .side { position: static; } }
 
 .card {
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
@@ -1426,7 +1422,7 @@ const CATALOG = [DEFAULT_AIRCRAFT, ATR_AIRCRAFT]; // built-in aircraft the fleet
 const LS_FLEET = 'mb.fleet.v7';
 const LS_DRAFTS = 'mb.drafts.v7';
 const LS_HIST = 'mb.hist.v7';
-const LS_LOADS = 'mb.loads.v7';
+const LS_LOADS = 'mb.loads.v8';
 const LS_SEL = 'mb.selected.v7';
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
@@ -1604,11 +1600,12 @@ function setUnits() {
   document.querySelectorAll('[data-u="arm"]').forEach((e) => e.textContent = armU());
 }
 
-// Per-aircraft demo flight, seeded from the aircraft's seedLoad.
+// A new flight starts empty: no flight number / route / alternate and no fuel.
+// Crew/pantry default to the aircraft fit; pax/cargo come from any seed.
 function freshLoad(ac) {
   const seed = ac.seedLoad || {};
   return {
-    flight: { no: seed.flightNo || '', route: seed.route || '', alt: seed.alt || '' },
+    flight: { no: '', route: '', alt: '' },
     basicMass: ac.basic?.mass ?? 0,
     basicArm: ac.basic?.arm ?? (ac.index?.sta ?? 0),
     crew: Object.fromEntries((ac.stations?.crew || []).map((c) => [c.id, c.mass ?? (ac.units?.mass === 'kg' ? 85 : 200)])),
@@ -1616,7 +1613,7 @@ function freshLoad(ac) {
     pax: seed.pax || {},
     sections: seed.sections || {},
     cargo: seed.cargo || {},
-    fuel: seed.fuel || { ramp: 0, taxi: 0, trip: 0 },
+    fuel: { ramp: '', taxi: '', trip: '' },
   };
 }
 
@@ -1730,7 +1727,7 @@ function loadPaxCount() {
 
 function renderNav() {
   const nav = el('nav'); nav.innerHTML = '';
-  const g = document.createElement('div'); g.className = 'group-label'; g.textContent = mode === 'dispatch' ? 'Dispatch — edit config' : 'Flight load';
+  const g = document.createElement('div'); g.className = 'group-label'; g.textContent = mode === 'dispatch' ? 'Dispatch' : 'Flight';
   nav.appendChild(g);
   for (const item of currentNav()) {
     const b = document.createElement('button');
@@ -2583,7 +2580,11 @@ function renderPilotStart() {
   for (const a of fleet) {
     const card = div('start-card');
     card.innerHTML = `<div class="sc-reg">${a.name}</div><div class="sc-sub">${a.units?.mass || 'lb'} / ${a.units?.arm || 'in'} · ${a.cabinRows ? 'section seating' : 'seat map'}</div><div class="sc-go">Start flight ▸</div>`;
-    card.onclick = () => { switchAircraft(a.id); setMode('pilot'); activePanel = 'flight'; showScreen('app'); renderNav(); showPanel(); };
+    card.onclick = () => {
+      ensureDraft(a.id);
+      loads[a.id] = freshLoad(drafts[a.id]); // start a new, empty flight
+      switchAircraft(a.id); setMode('pilot'); activePanel = 'flight'; showScreen('app'); renderNav(); showPanel();
+    };
     host.appendChild(card);
   }
 }
